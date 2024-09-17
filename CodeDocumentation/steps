@@ -1,0 +1,5 @@
+npm install dotenv
+npm install @supabase/supabase-js
+npm install bcryptjs
+npm install @mui/icons-material react-router-dom
+

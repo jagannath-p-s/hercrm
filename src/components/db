@@ -1,0 +1,208 @@
+-- PostgreSQL Database Schema for Herchamber Ladies Gym Management CRM and ERP
+
+-- This script creates all necessary tables, including constraints and relationships,
+-- to support the features outlined in the requirements.
+
+-- Begin transaction
+BEGIN;
+
+-- Table: lead_sources
+-- Purpose: Tracks the sources from which new members are generated.
+CREATE TABLE lead_sources (
+    id SERIAL PRIMARY KEY,
+    source_name VARCHAR(100) NOT NULL UNIQUE  -- e.g., 'Website', 'Referral', 'Social Media', 'Walk-in'
+);
+
+-- Table: payment_modes
+-- Purpose: Defines the various payment methods accepted.
+CREATE TABLE payment_modes (
+    id SERIAL PRIMARY KEY,
+    mode_name VARCHAR(50) NOT NULL UNIQUE     -- e.g., 'Cash', 'Credit Card', 'UPI', 'Debit Card'
+);
+
+-- Table: members
+-- Purpose: Tracks all active members along with their essential details, including personal health and fitness information.
+CREATE TABLE members (
+    id SERIAL PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100),
+    email VARCHAR(255) UNIQUE,
+    phone VARCHAR(50),
+    address TEXT,
+    date_of_birth DATE,
+    gender VARCHAR(10),
+    blood_group VARCHAR(5),                   -- e.g., 'A+', 'O-'
+    medical_conditions TEXT,                  -- Stores medical conditions
+    allergies TEXT,                           -- Stores allergies
+    injuries TEXT,                            -- Stores injuries or physical limitations
+    medications TEXT,                         -- Stores current medications
+    fitness_goals TEXT,                       -- e.g., 'Weight loss', 'Muscle building'
+    join_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    lead_source_id INTEGER REFERENCES lead_sources(id),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: memberships
+-- Purpose: Manages membership details, renewals, and expiration tracking.
+CREATE TABLE memberships (
+    id SERIAL PRIMARY KEY,
+    member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    membership_type VARCHAR(100) NOT NULL,    -- e.g., 'Monthly', 'Annual'
+    amount_due NUMERIC(10,2) NOT NULL,
+    amount_paid NUMERIC(10,2) DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'Active',      -- 'Active', 'Expired', 'Pending'
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: payments
+-- Purpose: Records all financial transactions, aiding in daily and weekly collection tracking.
+CREATE TABLE payments (
+    id SERIAL PRIMARY KEY,
+    membership_id INTEGER NOT NULL REFERENCES memberships(id) ON DELETE CASCADE,
+    amount NUMERIC(10,2) NOT NULL,
+    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    payment_mode_id INTEGER REFERENCES payment_modes(id),
+    transaction_id VARCHAR(100),
+    notes TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- View: pending_balances
+-- Purpose: Provides a view to track members with outstanding balances.
+CREATE VIEW pending_balances AS
+SELECT
+    m.id AS member_id,
+    m.first_name,
+    m.last_name,
+    mem.id AS membership_id,
+    mem.amount_due,
+    mem.amount_paid,
+    (mem.amount_due - mem.amount_paid) AS balance_due
+FROM
+    members m
+JOIN
+    memberships mem ON m.id = mem.member_id
+WHERE
+    (mem.amount_due - mem.amount_paid) > 0;
+
+-- Table: attendance_logs
+-- Purpose: Logs daily attendance of members using biometric data.
+CREATE TABLE attendance_logs (
+    id SERIAL PRIMARY KEY,
+    member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20),                       -- e.g., 'Check-in', 'Check-out'
+    device_id VARCHAR(100),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: staff
+-- Purpose: Manages staff details, attendance, and payroll information.
+CREATE TABLE staff (
+    id SERIAL PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100),
+    email VARCHAR(255) UNIQUE,
+    phone VARCHAR(50),
+    address TEXT,
+    date_of_birth DATE,
+    gender VARCHAR(10),
+    blood_group VARCHAR(5),
+    position VARCHAR(100),
+    join_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    salary NUMERIC(10,2),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: staff_attendance_logs
+-- Purpose: Tracks staff attendance using biometric data.
+CREATE TABLE staff_attendance_logs (
+    id SERIAL PRIMARY KEY,
+    staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20),                       -- e.g., 'Check-in', 'Check-out'
+    device_id VARCHAR(100),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: payroll
+-- Purpose: Manages salary disbursements to staff.
+CREATE TABLE payroll (
+    id SERIAL PRIMARY KEY,
+    staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+    payment_date DATE NOT NULL,
+    basic_salary NUMERIC(10,2) NOT NULL,
+    allowances NUMERIC(10,2) DEFAULT 0,
+    deductions NUMERIC(10,2) DEFAULT 0,
+    net_salary NUMERIC(10,2) NOT NULL,        -- Calculated as basic_salary + allowances - deductions
+    notes TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: equipment
+-- Purpose: Maintains a database of gym equipment, including purchase date, maintenance schedules, and depreciation values.
+CREATE TABLE equipment (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    model VARCHAR(100),
+    serial_number VARCHAR(100),
+    purchase_date DATE,
+    cost NUMERIC(10,2),
+    depreciation_rate NUMERIC(5,2),           -- Percentage per year
+    current_value NUMERIC(10,2),
+    maintenance_schedule TEXT,                -- e.g., 'Monthly', 'Quarterly'
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: maintenance_records
+-- Purpose: Tracks maintenance activities for equipment.
+CREATE TABLE maintenance_records (
+    id SERIAL PRIMARY KEY,
+    equipment_id INTEGER NOT NULL REFERENCES equipment(id) ON DELETE CASCADE,
+    maintenance_date DATE NOT NULL,
+    description TEXT,
+    cost NUMERIC(10,2),
+    next_maintenance_date DATE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: biometric_data_members
+-- Purpose: Stores biometric templates from the ESSL Magnum device for members.
+CREATE TABLE biometric_data_members (
+    id SERIAL PRIMARY KEY,
+    member_id INTEGER NOT NULL UNIQUE REFERENCES members(id) ON DELETE CASCADE,
+    biometric_template BYTEA NOT NULL,        -- Binary data for fingerprint templates
+    device_id VARCHAR(100),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: biometric_data_staff
+-- Purpose: Stores biometric templates from the ESSL Magnum device for staff.
+CREATE TABLE biometric_data_staff (
+    id SERIAL PRIMARY KEY,
+    staff_id INTEGER NOT NULL UNIQUE REFERENCES staff(id) ON DELETE CASCADE,
+    biometric_template BYTEA NOT NULL,        -- Binary data for fingerprint templates
+    device_id VARCHAR(100),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: fitness_goals
+-- Purpose: Stores structured data for fitness goals.
+CREATE TABLE fitness_goals (
+    id SERIAL PRIMARY KEY,
+    member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    goal VARCHAR(255) NOT NULL,
+    start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    target_date DATE,
+    progress_notes TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Commit transaction
+COMMIT;
