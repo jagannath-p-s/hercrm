@@ -1,0 +1,44 @@
+can you optimize my db based on my requirements , im building an crm and erp application for a gym initially , they rent a building , then buy stuff like equipments , then they do the advertising , and spend for software expenses etc ,they also have recurring expenses like monthly expenses , like rent , digital marketing expenses etc , then they add the staff data and the admin set permissions for other users like who all can access the expenses data rest of data etc , also there is a fingerprint reader which will be able to record and send who all are logging with their fingerprint , from the device , it only identifies pre enrolled users and send who all are punching and successfully authenticated using the fingerprint reader and send the data o a supabase table , the admins creates membeship plans like for how many days , the plan is active , which is connected with the users table , also remember that the users ,  these is a activated and deactivated state , which will be used to now if a user have a subscription , the users nearing thier expiry need to be notified , and once the user doesnot renews the plan her activity status have to be deactivated , 
+
+
+read carefully the Software Requirements for Herchamber Ladies Gym
+Active Member Management: Track all active members along with their essential
+details, including personal health and fitness information. This includes:
+● Blood Group (for emergencies)
+● Medical Conditions (such as diabetes, asthma, heart conditions)
+● Allergies (especially those impacting physical activity or medication)
+● Injuries or Physical Limitations (e.g., back injuries, knee issues)
+● Current Medications (if relevant to their physical activity)
+● Fitness Goals (e.g., weight loss, muscle building, general fitness)
+This information ensures personalized services and enhances the safety of members
+during workouts
+Membership Expiry Notifications : The system will automatically check the
+membership expiry date and trigger notifications as the expiry date approaches, such
+as:
+● 7 days before expiry
+● 3 days before expiry
+● On the expiry date
+Daily and Weekly Collection Tracking: Keep a detailed record of all financial
+transactions, monitoring both daily and weekly collections to ensure smooth financial
+management and quick access to financial data.
+Pending Balance Management: Track members with outstanding balances and send
+automated reminders to ensure timely payments and reduce overdue accounts.
+Renewal Management: Efficiently manage membership renewals with automated
+reminders and support for early renewals, ensuring continuous membership and
+improving retention rates.
+Daily Attendance Tracking: Log daily attendance of members, providing a clear
+overview of gym activity and helping identify patterns in gym usage.
+Lead Source Management: Record and monitor the sources from which new members
+are generated, such as social media, referrals, or walk-ins, to evaluate marketing and
+outreach effectiveness.
+Payment Modes: Support multiple payment options (credit card, debit card, UPI, cash)
+to provide members with flexibility and convenience in settling their dues.
+Staff Attendance and Payroll: Track staff attendance and generate salary reports,
+streamlining payroll processing and ensuring staff compensation is handled accurately
+and on time.
+Equipment and Asset Management: Maintain a comprehensive database of gym
+equipment, including details like purchase date, maintenance schedules, and
+depreciation values to manage asset life cycles and maintenance effectively.
+
+
+and improve this prompt , use real world examples 

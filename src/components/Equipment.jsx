@@ -4,13 +4,6 @@ import {
   TextField,
   IconButton,
   Tooltip,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Dialog,
   DialogActions,
   DialogContent,
@@ -24,7 +17,11 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   Add as AddIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
+import { CSVLink } from 'react-csv';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const Equipment = () => {
   const [equipments, setEquipments] = useState([]);
@@ -42,10 +39,6 @@ const Equipment = () => {
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  useEffect(() => {
-    fetchEquipments();
-  }, []);
-
   // Fetch data from "equipment" table
   const fetchEquipments = async () => {
     const { data, error } = await supabase.from('equipment').select('*');
@@ -55,6 +48,11 @@ const Equipment = () => {
       setEquipments(data);
     }
   };
+
+  // Fetch the equipments when the component mounts
+  useEffect(() => {
+    fetchEquipments();
+  }, []);
 
   const handleOpenDialog = () => {
     setOpenDialog(true);
@@ -118,6 +116,45 @@ const Equipment = () => {
     }
   };
 
+  const calculateCurrentValue = (cost, depreciation_rate, purchase_date) => {
+    const purchaseDate = new Date(purchase_date);
+    const currentDate = new Date();
+    const yearsPassed = (currentDate - purchaseDate) / (1000 * 60 * 60 * 24 * 365);
+    return (cost - (cost * (depreciation_rate / 100) * yearsPassed)).toFixed(2);
+  };
+
+  // Function to generate CSV download data
+  const csvData = equipments.map((equipment) => ({
+    name: equipment.name,
+    model: equipment.model,
+    serial_number: equipment.serial_number,
+    purchase_date: new Date(equipment.purchase_date).toLocaleDateString(),
+    cost: equipment.cost,
+    depreciation_rate: `${equipment.depreciation_rate}%`,
+    current_value: calculateCurrentValue(equipment.cost, equipment.depreciation_rate, equipment.purchase_date),
+    maintenance_schedule: equipment.maintenance_schedule,
+  }));
+
+  // Function to generate PDF report
+  const downloadPDF = () => {
+    const doc = new jsPDF();
+    doc.text('Equipment List', 20, 10);
+    doc.autoTable({
+      head: [['Name', 'Model', 'Serial Number', 'Purchase Date', 'Cost', 'Depreciation Rate', 'Current Value', 'Maintenance Schedule']],
+      body: equipments.map(equipment => [
+        equipment.name,
+        equipment.model,
+        equipment.serial_number,
+        new Date(equipment.purchase_date).toLocaleDateString(),
+        equipment.cost,
+        `${equipment.depreciation_rate}%`,
+        calculateCurrentValue(equipment.cost, equipment.depreciation_rate, equipment.purchase_date),
+        equipment.maintenance_schedule,
+      ]),
+    });
+    doc.save('equipment_list.pdf');
+  };
+
   const showSnackbar = (message, severity) => {
     setSnackbar({ open: true, message, severity });
   };
@@ -136,9 +173,27 @@ const Equipment = () => {
             </div>
             <div className="flex items-center space-x-4">
               <Tooltip title="Add new equipment">
-                <IconButton onClick={handleOpenDialog} style={{ backgroundColor: '#e3f2fd', color: '#1e88e5', borderRadius: '12px' }}>
-                  <AddIcon style={{ fontSize: '1.75rem' }} />
-                </IconButton>
+                <span>
+                  <IconButton onClick={handleOpenDialog} className="bg-blue-100 text-blue-600 rounded-full p-2">
+                    <AddIcon style={{ fontSize: '1.75rem' }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Download CSV">
+                <span>
+                  <CSVLink data={csvData} filename="equipment_list.csv">
+                    <IconButton className="bg-green-100 text-green-600 rounded-full p-2">
+                      <DownloadIcon />
+                    </IconButton>
+                  </CSVLink>
+                </span>
+              </Tooltip>
+              <Tooltip title="Download PDF">
+                <span>
+                  <IconButton onClick={downloadPDF} className="bg-red-100 text-red-600 rounded-full p-2">
+                    <DownloadIcon />
+                  </IconButton>
+                </span>
               </Tooltip>
             </div>
           </div>
@@ -146,43 +201,49 @@ const Equipment = () => {
       </div>
 
       <div className="flex-grow p-4 space-x-4 overflow-x-auto">
-        <TableContainer component={Paper} className="shadow-md sm:rounded-lg overflow-auto">
-          <Table stickyHeader>
-            <TableHead>
-              <TableRow>
-                <TableCell>Equipment Name</TableCell>
-                <TableCell>Model</TableCell>
-                <TableCell>Serial Number</TableCell>
-                <TableCell>Purchase Date</TableCell>
-                <TableCell>Cost</TableCell>
-                <TableCell>Depreciation Rate</TableCell>
-                <TableCell>Maintenance Schedule</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+          <table className="min-w-full table-auto">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Equipment Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Serial Number</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depreciation Rate</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Value</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Maintenance Schedule</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
               {equipments.map((equipment) => (
-                <TableRow key={equipment.id}>
-                  <TableCell>{equipment.name}</TableCell>
-                  <TableCell>{equipment.model}</TableCell>
-                  <TableCell>{equipment.serial_number}</TableCell>
-                  <TableCell>{new Date(equipment.purchase_date).toLocaleDateString()}</TableCell>
-                  <TableCell>{equipment.cost}</TableCell>
-                  <TableCell>{equipment.depreciation_rate}%</TableCell>
-                  <TableCell>{equipment.maintenance_schedule}</TableCell>
-                  <TableCell>
+                <tr key={equipment.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">{equipment.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{equipment.model}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{equipment.serial_number}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {new Date(equipment.purchase_date).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">{equipment.cost}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{equipment.depreciation_rate}%</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {calculateCurrentValue(equipment.cost, equipment.depreciation_rate, equipment.purchase_date)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">{equipment.maintenance_schedule}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <IconButton onClick={() => handleEditEquipment(equipment)}>
                       <EditIcon />
                     </IconButton>
                     <IconButton onClick={() => handleDeleteEquipment(equipment.id)}>
                       <DeleteIcon />
                     </IconButton>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
