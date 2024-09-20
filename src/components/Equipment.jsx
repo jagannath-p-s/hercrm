@@ -169,12 +169,12 @@ const Equipment = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-3">
             <div className="flex items-center space-x-4">
-              <h1 className="text-xl font-semibold ml-2">Manage Equipment</h1>
+              <h1 className="text-xl font-semibold text-blue-800 ml-2">Manage Gym Equipment</h1>
             </div>
             <div className="flex items-center space-x-4">
               <Tooltip title="Add new equipment">
                 <span>
-                  <IconButton onClick={handleOpenDialog} className="bg-blue-100 text-blue-600 rounded-full p-2">
+                  <IconButton onClick={handleOpenDialog} className="bg-blue-500 text-white rounded-full p-2">
                     <AddIcon style={{ fontSize: '1.75rem' }} />
                   </IconButton>
                 </span>
@@ -182,7 +182,7 @@ const Equipment = () => {
               <Tooltip title="Download CSV">
                 <span>
                   <CSVLink data={csvData} filename="equipment_list.csv">
-                    <IconButton className="bg-green-100 text-green-600 rounded-full p-2">
+                    <IconButton className="bg-green-500 text-white rounded-full p-2">
                       <DownloadIcon />
                     </IconButton>
                   </CSVLink>
@@ -190,7 +190,7 @@ const Equipment = () => {
               </Tooltip>
               <Tooltip title="Download PDF">
                 <span>
-                  <IconButton onClick={downloadPDF} className="bg-red-100 text-red-600 rounded-full p-2">
+                  <IconButton onClick={downloadPDF} className="bg-red-500 text-white rounded-full p-2">
                     <DownloadIcon />
                   </IconButton>
                 </span>
@@ -232,10 +232,10 @@ const Equipment = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">{equipment.maintenance_schedule}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <IconButton onClick={() => handleEditEquipment(equipment)}>
+                    <IconButton onClick={() => handleEditEquipment(equipment)} className="text-blue-500">
                       <EditIcon />
                     </IconButton>
-                    <IconButton onClick={() => handleDeleteEquipment(equipment.id)}>
+                    <IconButton onClick={() => handleDeleteEquipment(equipment.id)} className="text-red-500">
                       <DeleteIcon />
                     </IconButton>
                   </td>
@@ -247,8 +247,8 @@ const Equipment = () => {
       </div>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{editMode ? 'Edit Equipment' : 'Add New Equipment'}</DialogTitle>
-        <DialogContent>
+        <DialogTitle>{editMode ? 'Edit Gym Equipment' : 'Add New Gym Equipment'}</DialogTitle>
+        <DialogContent className="space-y-4">
           <TextField
             label="Equipment Name"
             variant="outlined"
@@ -256,7 +256,7 @@ const Equipment = () => {
             margin="dense"
             value={newEquipment.name}
             onChange={(e) => setNewEquipment({ ...newEquipment, name: e.target.value })}
-            className="mt-2 mb-4"
+            className="mt-2"
           />
           <TextField
             label="Model"
@@ -265,7 +265,7 @@ const Equipment = () => {
             margin="dense"
             value={newEquipment.model}
             onChange={(e) => setNewEquipment({ ...newEquipment, model: e.target.value })}
-            className="mt-2 mb-4"
+            className="mt-2"
           />
           <TextField
             label="Serial Number"
@@ -274,7 +274,7 @@ const Equipment = () => {
             margin="dense"
             value={newEquipment.serial_number}
             onChange={(e) => setNewEquipment({ ...newEquipment, serial_number: e.target.value })}
-            className="mt-2 mb-4"
+            className="mt-2"
           />
           <TextField
             label="Purchase Date"
@@ -284,7 +284,7 @@ const Equipment = () => {
             margin="dense"
             value={newEquipment.purchase_date}
             onChange={(e) => setNewEquipment({ ...newEquipment, purchase_date: e.target.value })}
-            className="mt-2 mb-4"
+            className="mt-2"
           />
           <TextField
             label="Cost"
@@ -293,7 +293,7 @@ const Equipment = () => {
             margin="dense"
             value={newEquipment.cost}
             onChange={(e) => setNewEquipment({ ...newEquipment, cost: e.target.value })}
-            className="mt-2 mb-4"
+            className="mt-2"
           />
           <TextField
             label="Depreciation Rate (%)"
@@ -302,7 +302,7 @@ const Equipment = () => {
             margin="dense"
             value={newEquipment.depreciation_rate}
             onChange={(e) => setNewEquipment({ ...newEquipment, depreciation_rate: e.target.value })}
-            className="mt-2 mb-4"
+            className="mt-2"
           />
           <TextField
             label="Maintenance Schedule"
@@ -311,14 +311,14 @@ const Equipment = () => {
             margin="dense"
             value={newEquipment.maintenance_schedule}
             onChange={(e) => setNewEquipment({ ...newEquipment, maintenance_schedule: e.target.value })}
-            className="mt-2 mb-4"
+            className="mt-2"
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)} color="primary">
+        <DialogActions className="bg-gray-100">
+          <Button onClick={() => setOpenDialog(false)} className="bg-gray-300 text-gray-700 hover:bg-gray-400">
             Cancel
           </Button>
-          <Button onClick={handleSaveEquipment} color="primary">
+          <Button onClick={handleSaveEquipment} className="bg-blue-500 text-white hover:bg-blue-600">
             Save
           </Button>
         </DialogActions>

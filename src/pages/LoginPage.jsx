@@ -32,13 +32,13 @@ const LoginPage = () => {
       setError(''); // Clear any previous errors
       try {
         const { data, error } = await supabase
-          .from('users')
-          .select('id, useremail, username, password, role, can_edit_staff, can_edit_pipeline, can_edit_product, can_edit_files, can_edit_enquiries, can_edit_stock, can_edit_product_enquiry, can_edit_service_enquiry, can_edit_sales, can_see_performance')
+          .from('staffs') // Use the 'staffs' table
+          .select('id, useremail, username, password, role')
           .eq('useremail', credentials.email)
           .single();
 
         if (error || !data) {
-          console.error('Error fetching user:', error);
+          console.error('Error fetching staff:', error);
           throw new Error('Invalid email or password'); // Set error for invalid credentials
         }
 
@@ -52,18 +52,6 @@ const LoginPage = () => {
           useremail: data.useremail,
           username: data.username,
           role: data.role,
-          permissions: {
-            can_edit_staff: data.can_edit_staff,
-            can_edit_pipeline: data.can_edit_pipeline,
-            can_edit_product: data.can_edit_product,
-            can_edit_files: data.can_edit_files,
-            can_edit_enquiries: data.can_edit_enquiries,
-            can_edit_stock: data.can_edit_stock,
-            can_edit_product_enquiry: data.can_edit_product_enquiry,
-            can_edit_service_enquiry: data.can_edit_service_enquiry,
-            can_edit_sales: data.can_edit_sales,
-            can_see_performance: data.can_see_performance,
-          }
         };
 
         const expirationDate = new Date(new Date().getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days from now

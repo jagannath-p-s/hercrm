@@ -10,9 +10,12 @@ import {
   Add as AddIcon,
   ExitToApp as ExitToAppIcon,
 } from '@mui/icons-material';
-import CoPresentIcon from '@mui/icons-material/CoPresent'; // New icon for Attendance
-import FitnessCenterIcon from '@mui/icons-material/FitnessCenter'; // New icon for Equipment
-import { Tooltip, Menu, MenuItem, Snackbar, Alert, Badge, CircularProgress } from '@mui/material';
+import CoPresentIcon from '@mui/icons-material/CoPresent'; // Icon for Attendance
+import FitnessCenterIcon from '@mui/icons-material/FitnessCenter'; // Icon for Equipment
+import { Tooltip, Menu, MenuItem, Snackbar, Alert, CircularProgress } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link, Route, Routes, useLocation, Navigate } from 'react-router-dom';
+
 import SearchBar from '../components/SearchBar';
 import Dashboard from '../components/Dashboard';
 import Members from '../components/Members';
@@ -25,7 +28,6 @@ import { supabase } from '../supabaseClient';
 
 const HomePage = () => {
   const [anchorEl, setAnchorEl] = useState(null);
-  const [addMenuAnchorEl, setAddMenuAnchorEl] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeComponent, setActiveComponent] = useState('Dashboard'); // Default to Dashboard
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -33,12 +35,13 @@ const HomePage = () => {
   const sidebarRef = useRef(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     if (storedUser && storedUser.expiry > Date.now()) {
       setUser(storedUser);
-      fetchUserPermissions(storedUser.id);
+      fetchUserData(storedUser.id); // Fetch user data from 'staffs' table
     } else {
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -46,14 +49,14 @@ const HomePage = () => {
     setLoading(false);
   }, []);
 
-  const fetchUserPermissions = async (userId) => {
+  const fetchUserData = async (userId) => {
     try {
-      const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
+      const { data, error } = await supabase.from('staffs').select('*').eq('id', userId).single();
       if (error) throw error;
       setUser((prevUser) => ({ ...prevUser, ...data }));
       localStorage.setItem('user', JSON.stringify({ ...user, ...data }));
     } catch (error) {
-      showSnackbar(`Error fetching user permissions: ${error.message}`, 'error');
+      showSnackbar(`Error fetching user data: ${error.message}`, 'error');
     }
   };
 
@@ -63,14 +66,6 @@ const HomePage = () => {
 
   const handleMenuClose = () => {
     setAnchorEl(null);
-  };
-
-  const handleAddMenuOpen = (event) => {
-    setAddMenuAnchorEl(event.currentTarget);
-  };
-
-  const handleAddMenuClose = () => {
-    setAddMenuAnchorEl(null);
   };
 
   const handleToggle = () => {
@@ -100,9 +95,9 @@ const HomePage = () => {
     { icon: <GroupIcon />, tooltip: "Members", component: 'Members' },
     { icon: <CardMembershipIcon />, tooltip: "Memberships", component: 'Memberships' },
     { icon: <AccountBalanceIcon />, tooltip: "Finance", component: 'Finance' },
-    { icon: <CoPresentIcon />, tooltip: "Attendance", component: 'Attendance' }, // New icon for Attendance
+    { icon: <CoPresentIcon />, tooltip: "Attendance", component: 'Attendance' }, // Icon for Attendance
     { icon: <WorkIcon />, tooltip: "Staff", component: 'Staff' },
-    { icon: <FitnessCenterIcon />, tooltip: "Equipment", component: 'Equipment' }, // New icon for Equipment
+    { icon: <FitnessCenterIcon />, tooltip: "Equipment", component: 'Equipment' }, // Icon for Equipment
   ];
 
   const renderComponent = () => {

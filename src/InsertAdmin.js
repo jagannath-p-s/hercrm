@@ -1,29 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
-const supabaseUrl = "https://btkcswhboimzhaeyujlc.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0a2Nzd2hib2ltemhhZXl1amxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUyNjA5MzAsImV4cCI6MjA0MDgzNjkzMH0.zgZX8hiODJfxuF9PGIMIO6IEh_bIeKMld9Hcdju_TdQ";
+
+// Supabase credentials
+const supabaseUrl = "https://prhanfqprvkkzapufmec.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByaGFuZnFwcnZra3phcHVmbWVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjY4MDk2NTgsImV4cCI6MjA0MjM4NTY1OH0.dc7x6-RRfz7rRuz8F6FB0mvhM-kDK5rxc2WpJxfs5TU";
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
-
 
 // Admin user data
 const adminUser = {
   username: 'AdminUser', 
   useremail: 'admin@example.com',
-  password: 'adminpassword', 
+  password: '123', 
   role: 'Admin', 
   mobile_number: '9999999999', 
-  can_edit_staff: true,
-  can_edit_pipeline: true,
-  can_edit_product: true,
-  can_edit_files: true,
-  can_edit_enquiries: true,
-  can_edit_stock: true,
-  can_edit_product_enquiry: true,
-  can_edit_service_enquiry: true,
-  can_edit_sales: true,
-  can_see_performance: true,
-  employee_code: 'ADM001', // Employee code for admin
+  employee_code: 'ADM001' // Employee code for admin
 };
 
 // Function to hash the password and insert the user data
@@ -33,9 +24,9 @@ async function insertUser(user) {
     const salt = bcrypt.genSaltSync(12);
     const hashedPassword = bcrypt.hashSync(user.password, salt);
 
-    // Insert user data with hashed password
+    // Insert user data with hashed password into the 'staffs' table
     const { data, error } = await supabase
-      .from('users')
+      .from('staffs')
       .insert([{ ...user, password: hashedPassword }]);
 
     if (error) {
