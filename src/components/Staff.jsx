@@ -1,324 +1,601 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+// Staff.jsx
+
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  TextField,
-  MenuItem,
-  IconButton,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  Paper,
-  Snackbar,
-  Alert,
-  Menu,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Switch,
-} from '@mui/material';
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
+  Users,
+  UserCheck,
+  Clock,
+  XCircle,
+  MoreVertical,
+} from "lucide-react";
+import { supabase } from "../supabaseClient";
+import { Input } from "@/components/ui/input";
 
 import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Key as KeyIcon,
-  Description as DescriptionIcon,
-  MoreVert as MoreVertIcon,
-  Delete as DeleteIcon,
-} from '@mui/icons-material';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+  format,
+  parseISO,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameDay,
+  min,
+} from "date-fns";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Staff = () => {
-  const [staff, setStaff] = useState([]);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [dialogType, setDialogType] = useState('');
-  const [selectedStaff, setSelectedStaff] = useState(null);
-  const [formData, setFormData] = useState({
-    username: '',
-    useremail: '',
-    role: 'Admin',
-    mobile_number: '',
-    employee_code: '',
-    subscription_end: null,
-    active: true,
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [totalStaff, setTotalStaff] = useState(0);
+  const [present, setPresent] = useState(0);
+  const [absent, setAbsent] = useState(0);
+  const [late, setLate] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [newStaffName, setNewStaffName] = useState("");
+  const [newDepartment, setNewDepartment] = useState("");
+  const [newPosition, setNewPosition] = useState("");
+  const [selectedStaff, setSelectedStaff] = useState({});
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return format(now, "MMMM yyyy");
   });
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const officeStartTime = "09:00";
+  const lateThreshold = "09:15";
 
   useEffect(() => {
-    fetchStaff();
-  }, []);
+    fetchAttendanceDataForMonth();
+  }, [selectedMonth]);
 
-  const fetchStaff = async () => {
-    const { data, error } = await supabase.from('staffs').select('*');
-    if (error) {
-      console.error('Error fetching staff:', error);
-    } else {
-      setStaff(data);
-    }
-  };
+  const fetchAttendanceDataForMonth = async () => {
+    const [month, year] = selectedMonth.split(" ");
+    const firstDay = startOfMonth(new Date(`${month} 1, ${year}`));
+    const lastDay = endOfMonth(firstDay);
+    const today = new Date();
+    const lastRelevantDay = min([lastDay, today]);
+    const daysInMonth = eachDayOfInterval({
+      start: firstDay,
+      end: lastRelevantDay,
+    });
 
-  const handleOpenDialog = (type, staffMember = null) => {
-    setDialogType(type);
-    setSelectedStaff(staffMember);
-    if (staffMember) {
-      setFormData({
-        username: staffMember.username,
-        useremail: staffMember.useremail,
-        role: staffMember.role,
-        mobile_number: staffMember.mobile_number,
-        employee_code: staffMember.employee_code,
-        subscription_end: staffMember.subscription_end || null,
-        active: staffMember.active,
+    try {
+      // Fetch staff data
+      const { data: staffData, error: staffError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("role", "trainer");
+      if (staffError) throw staffError;
+
+      // Fetch access logs for the selected month
+      const { data: accessLogs, error: logsError } = await supabase
+        .from("access_logs")
+        .select("*")
+        .gte("timestamp", firstDay.toISOString())
+        .lte("timestamp", lastRelevantDay.toISOString());
+      if (logsError) throw logsError;
+
+      // Create a map to hold attendance data per staff
+      const staffMap = staffData.reduce((acc, staff) => {
+        acc[staff.id] = {
+          id: staff.id,
+          name: staff.name,
+          department: staff.department || "N/A",
+          position: staff.position || "N/A",
+          daysPresent: 0,
+          daysLate: 0,
+          daysAbsent: daysInMonth.length,
+          totalCheckInTime: 0,
+          checkInCount: 0,
+          status: "Absent",
+          checkIn: "-",
+          checkOut: "-",
+        };
+        return acc;
+      }, {});
+
+      // Process each day in the month
+      for (const day of daysInMonth) {
+        const dayStart = new Date(day);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(day);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        // Filter logs for the day
+        const dayLogs = accessLogs.filter(
+          (log) =>
+            new Date(log.timestamp) >= dayStart &&
+            new Date(log.timestamp) <= dayEnd
+        );
+
+        for (const staff of staffData) {
+          const staffLogs = dayLogs.filter(
+            (log) => log.user_id === staff.id.toString()
+          );
+
+          if (staffLogs.length > 0) {
+            // Assume the first log is check-in and the last is check-out
+            const checkInLog = staffLogs[0];
+            const checkOutLog = staffLogs[staffLogs.length - 1];
+
+            const checkInTime = format(
+              parseISO(checkInLog.timestamp),
+              "HH:mm"
+            );
+            const checkOutTime = format(
+              parseISO(checkOutLog.timestamp),
+              "HH:mm"
+            );
+
+            const status =
+              checkInTime <= lateThreshold ? "Present" : "Late";
+
+            staffMap[staff.id].daysAbsent -= 1;
+            staffMap[staff.id].daysPresent += 1;
+            if (status === "Late") {
+              staffMap[staff.id].daysLate += 1;
+            }
+            staffMap[staff.id].totalCheckInTime +=
+              parseFloat(checkInTime.split(":")[0]) +
+              parseFloat(checkInTime.split(":")[1]) / 60;
+            staffMap[staff.id].checkInCount += 1;
+
+            if (isSameDay(day, today)) {
+              staffMap[staff.id].status = status;
+              staffMap[staff.id].checkIn = checkInTime;
+              staffMap[staff.id].checkOut = checkOutTime;
+            }
+          }
+        }
+      }
+
+      // Calculate average check-in time
+      Object.values(staffMap).forEach((staff) => {
+        staff.averageCheckIn =
+          staff.checkInCount > 0
+            ? format(
+                new Date(
+                  0,
+                  0,
+                  0,
+                  0,
+                  Math.round(
+                    (staff.totalCheckInTime / staff.checkInCount) * 60
+                  )
+                ),
+                "HH:mm"
+              )
+            : "-";
       });
-    } else {
-      setFormData({
-        username: '',
-        useremail: '',
-        role: 'Admin',
-        mobile_number: '',
-        employee_code: '',
-        subscription_end: null,
-        active: true,
-      });
-    }
-    setOpenDialog(true);
-  };
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setSelectedStaff(null);
-  };
+      const staffList = Object.values(staffMap);
+      const presentCount = staffList.filter(
+        (staff) => staff.status === "Present" || staff.status === "Late"
+      ).length;
+      const lateCount = staffList.filter(
+        (staff) => staff.status === "Late"
+      ).length;
+      const absentCount = staffList.filter(
+        (staff) => staff.status === "Absent"
+      ).length;
 
-  const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleDelete = async (staffId) => {
-    const { error } = await supabase.from('staffs').delete().eq('id', staffId);
-    if (error) {
-      console.error('Error deleting staff:', error);
-      setSnackbar({ open: true, message: 'Failed to delete staff', severity: 'error' });
-    } else {
-      setSnackbar({ open: true, message: 'Staff deleted successfully', severity: 'success' });
-      fetchStaff(); // Refresh the data
+      setAttendanceData(staffList);
+      setTotalStaff(staffData.length);
+      setPresent(presentCount);
+      setLate(lateCount);
+      setAbsent(absentCount);
+    } catch (error) {
+      console.error("Error fetching attendance data:", error);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    let result;
-    if (dialogType === 'add') {
-      result = await supabase.from('staffs').insert([formData]);
-    } else if (dialogType === 'edit') {
-      result = await supabase
-        .from('staffs')
-        .update(formData)
-        .eq('id', selectedStaff.id);
-    }
-
-    if (result.error) {
-      console.error('Error:', result.error);
-      setSnackbar({ open: true, message: 'An error occurred', severity: 'error' });
-    } else {
-      setSnackbar({ open: true, message: 'Operation successful', severity: 'success' });
-      fetchStaff(); // Refresh the data dynamically
-      handleCloseDialog();
+  const handleAddStaff = async () => {
+    if (newStaffName.trim()) {
+      const { data, error } = await supabase.from("users").insert([
+        {
+          name: newStaffName.trim(),
+          role: "trainer",
+          department: newDepartment.trim(),
+          position: newPosition.trim(),
+        },
+      ]);
+      if (error) {
+        console.error("Error adding new staff:", error);
+      } else {
+        setNewStaffName("");
+        setNewDepartment("");
+        setNewPosition("");
+        setIsDialogOpen(false); // Close the dialog after saving
+        fetchAttendanceDataForMonth(); // Refresh attendance data after adding a staff member
+      }
     }
   };
 
-  const handleMenuClick = (event) => {
-    setMenuAnchorEl(event.currentTarget);
+  const handleEditStaff = async () => {
+    if (
+      selectedStaff.name &&
+      selectedStaff.department &&
+      selectedStaff.position
+    ) {
+      const { error } = await supabase
+        .from("users")
+        .update({
+          name: selectedStaff.name,
+          department: selectedStaff.department,
+          position: selectedStaff.position,
+        })
+        .eq("id", selectedStaff.id);
+
+      if (error) {
+        console.error("Error updating staff:", error);
+      } else {
+        setIsEditDialogOpen(false);
+        fetchAttendanceDataForMonth(); // Refresh attendance data
+      }
+    }
   };
 
-  const handleMenuClose = () => {
-    setMenuAnchorEl(null);
+  const handleDeleteStaff = async () => {
+    if (selectedStaff) {
+      const { error } = await supabase
+        .from("users")
+        .delete()
+        .eq("id", selectedStaff.id);
+      if (error) {
+        console.error("Error deleting staff:", error);
+      } else {
+        setIsAlertDialogOpen(false);
+        fetchAttendanceDataForMonth(); // Refresh attendance data
+      }
+    }
+  };
+
+  const openEditDialog = (staff) => {
+    setSelectedStaff(staff); // Set the selected staff's full details
+    setIsEditDialogOpen(true);
+  };
+
+  const openDeleteDialog = (staff) => {
+    setSelectedStaff(staff);
+    setIsAlertDialogOpen(true);
+  };
+
+  const handleViewReport = (staffId) => {
+    navigate(`/home/attendance/${staffId}`); // Redirect to individual attendance report
+  };
+
+  const filteredAttendanceData = attendanceData.filter((staff) =>
+    staff.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const generateMonthOptions = () => {
+    const options = [];
+    const currentDate = new Date();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() - i,
+        1
+      );
+      options.push(format(date, "MMMM yyyy"));
+    }
+    return options;
   };
 
   return (
-    <div className="p-6  space-y-6">
-      {/* Header Section */}
+    <div>
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold ">Staff Management</h2>
-        <Button
-          variant="contained"
-          style={{ backgroundColor: "#4F46E5", color: "#FFF" }}
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog('add')}
-        >
-          ADD STAFF
-        </Button>
+        <h1 className="text-2xl font-bold ml-2 md:-ml-0">Staff Attendance</h1>
+        <div className="flex items-center space-x-4">
+         
+        </div>
       </div>
 
-      {/* Staff Table */}
-      <TableContainer component={Paper} style={{ boxShadow: 'none' }}>
-        <Table>
-          <TableHead >
-            <TableRow>
-              <TableCell className="font-bold">#</TableCell>
-              <TableCell className="font-bold">Username</TableCell>
-              <TableCell className="font-bold">Email</TableCell>
-              <TableCell className="font-bold">Role</TableCell>
-              <TableCell className="font-bold">Mobile Number</TableCell>
-              <TableCell className="font-bold">Employee Code</TableCell>
-              <TableCell className="font-bold">Subscription End</TableCell>
-              <TableCell className="font-bold">Active</TableCell>
-              <TableCell className="font-bold">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {staff.map((staffMember, index) => (
-              <TableRow key={staffMember.id} hover style={{ backgroundColor: '#FFF' }}>
-                <TableCell>{index + 1}</TableCell>
-                <TableCell>{staffMember.username}</TableCell>
-                <TableCell>{staffMember.useremail}</TableCell>
-                <TableCell>{staffMember.role}</TableCell>
-                <TableCell>{staffMember.mobile_number}</TableCell>
-                <TableCell>{staffMember.employee_code}</TableCell>
-                <TableCell>{staffMember.subscription_end}</TableCell>
-                <TableCell>
-                  <Switch checked={staffMember.active} />
-                </TableCell>
-                <TableCell>
-                  <IconButton onClick={handleMenuClick}>
-                    <MoreVertIcon />
-                  </IconButton>
-                  <Menu
-                    anchorEl={menuAnchorEl}
-                    open={Boolean(menuAnchorEl)}
-                    onClose={handleMenuClose}
-                  >
-                    <ListItem button onClick={() => handleOpenDialog('edit', staffMember)}>
-                      <ListItemIcon><EditIcon /></ListItemIcon>
-                      <ListItemText primary="Edit" />
-                    </ListItem>
-                    <ListItem button onClick={() => handleOpenDialog('changePassword', staffMember)}>
-                      <ListItemIcon><KeyIcon /></ListItemIcon>
-                      <ListItemText primary="Change Password" />
-                    </ListItem>
-                    <ListItem button onClick={() => handleDelete(staffMember.id)}>
-                      <ListItemIcon><DeleteIcon /></ListItemIcon>
-                      <ListItemText primary="Delete" />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemIcon><DescriptionIcon /></ListItemIcon>
-                      <ListItemText primary="View Details" />
-                    </ListItem>
-                  </Menu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Staff
+            </CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalStaff}</div>
+          </CardContent>
+        </Card>
 
-      {/* Dialog for Adding/Editing/Changing Password */}
-      <Dialog open={openDialog} onClose={handleCloseDialog}>
-        <DialogTitle>
-          {dialogType === 'add'
-            ? 'Add New Staff'
-            : dialogType === 'edit'
-            ? 'Edit Staff'
-            : 'Change Password'}
-        </DialogTitle>
-        <form onSubmit={handleSubmit}>
-          <DialogContent>
-            <TextField
-              margin="dense"
-              name="username"
-              label="Username"
-              type="text"
-              fullWidth
-              value={formData.username}
-              onChange={handleInputChange}
-              required
-            />
-            <TextField
-              margin="dense"
-              name="useremail"
-              label="Email"
-              type="email"
-              fullWidth
-              value={formData.useremail}
-              onChange={handleInputChange}
-              required
-            />
-            <TextField
-              margin="dense"
-              name="role"
-              label="Role"
-              type="text"
-              fullWidth
-              value={formData.role}
-              onChange={handleInputChange}
-              required
-            />
-            <TextField
-              margin="dense"
-              name="mobile_number"
-              label="Mobile Number"
-              type="tel"
-              fullWidth
-              value={formData.mobile_number}
-              onChange={handleInputChange}
-              required
-            />
-            <TextField
-              margin="dense"
-              name="employee_code"
-              label="Employee Code"
-              type="text"
-              fullWidth
-              value={formData.employee_code}
-              onChange={handleInputChange}
-              required
-            />
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <DatePicker
-                label="Subscription End"
-                value={formData.subscription_end}
-                onChange={(newValue) => {
-                  setFormData({ ...formData, subscription_end: newValue });
-                }}
-                renderInput={(params) => <TextField {...params} fullWidth margin="dense" />}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Present</CardTitle>
+            <UserCheck className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{present}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Late</CardTitle>
+            <Clock className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{late}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Absent</CardTitle>
+            <XCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{absent}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center mb-4">
+            <CardTitle>Attendance Details</CardTitle>
+            <div className="flex items-center space-x-4">
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {generateMonthOptions().map((month) => (
+                    <SelectItem key={month} value={month}>
+                      {month}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="Search staff"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-[200px]"
               />
-            </LocalizationProvider>
-            <Switch
-              checked={formData.active}
-              onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-              label="Active"
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDialog} color="secondary">
-              Cancel
-            </Button>
-            <Button type="submit" color="primary">
-              {dialogType === 'add' ? 'Add' : dialogType === 'edit' ? 'Update' : 'Change Password'}
-            </Button>
-          </DialogActions>
-        </form>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="secondary">Add Staff</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Staff</DialogTitle>
+                    <DialogDescription>
+                      Fill in the details of the new staff member.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Input
+                    placeholder="Staff Name"
+                    value={newStaffName}
+                    onChange={(e) => setNewStaffName(e.target.value)}
+                    className="mb-2"
+                  />
+                  <Input
+                    placeholder="Department"
+                    value={newDepartment}
+                    onChange={(e) => setNewDepartment(e.target.value)}
+                    className="mb-2"
+                  />
+                  <Input
+                    placeholder="Position"
+                    value={newPosition}
+                    onChange={(e) => setNewPosition(e.target.value)}
+                    className="mb-4"
+                  />
+                  <Button onClick={handleAddStaff}>Add Staff</Button>
+                </DialogContent>
+              </Dialog>
+            
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Current Date</TableHead>
+                <TableHead>Check In</TableHead>
+                <TableHead>Check Out</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Days Present</TableHead>
+                <TableHead>Days Absent</TableHead>
+                <TableHead>Days Late</TableHead>
+                <TableHead>Avg Check-in</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAttendanceData.map((record) => (
+                <TableRow
+                  key={record.id}
+                  className="cursor-pointer hover:bg-gray-100"
+                >
+                  <TableCell className="font-medium">{record.name}</TableCell>
+                  <TableCell>
+                    {new Date().toISOString().split("T")[0]}
+                  </TableCell>
+                  <TableCell>{record.checkIn}</TableCell>
+                  <TableCell>{record.checkOut}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        record.status === "Present"
+                          ? "default"
+                          : record.status === "Late"
+                          ? "warning"
+                          : "destructive"
+                      }
+                    >
+                      {record.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {record.daysPresent}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {record.daysAbsent}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {record.daysLate}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {record.averageCheckIn}
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <MoreVertical className="h-5 w-5 cursor-pointer" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem
+                          className="cursor-pointer font-medium"
+                          onClick={() => handleViewReport(record.id)}
+                        >
+                          View
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="cursor-pointer font-medium"
+                          onClick={() => openEditDialog(record)}
+                        >
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="cursor-pointer font-medium"
+                          onClick={() => openDeleteDialog(record)}
+                        >
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Edit Staff Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Staff</DialogTitle>
+            <DialogDescription>
+              Update the details of the staff member.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Staff Name"
+            value={selectedStaff?.name || ""}
+            onChange={(e) =>
+              setSelectedStaff({ ...selectedStaff, name: e.target.value })
+            }
+            className="mb-2"
+          />
+          <Input
+            placeholder="Department"
+            value={selectedStaff?.department || ""}
+            onChange={(e) =>
+              setSelectedStaff({
+                ...selectedStaff,
+                department: e.target.value,
+              })
+            }
+            className="mb-2"
+          />
+          <Input
+            placeholder="Position"
+            value={selectedStaff?.position || ""}
+            onChange={(e) =>
+              setSelectedStaff({
+                ...selectedStaff,
+                position: e.target.value,
+              })
+            }
+            className="mb-4"
+          />
+          <Button onClick={handleEditStaff}>Save</Button>
+        </DialogContent>
       </Dialog>
 
-      {/* Snackbar for feedback */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      {/* Delete Staff Alert Dialog */}
+      <AlertDialog
+        open={isAlertDialogOpen}
+        onOpenChange={setIsAlertDialogOpen}
       >
-        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Are you sure you want to delete this staff member?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone and will permanently delete the
+              staff member.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteStaff}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
