@@ -35,6 +35,7 @@ import {
   eachDayOfInterval,
   isSameDay,
   min,
+  endOfDay,
 } from "date-fns";
 import {
   Select,
@@ -78,8 +79,6 @@ const Staff = () => {
   const [late, setLate] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [newStaffName, setNewStaffName] = useState("");
-  const [newDepartment, setNewDepartment] = useState("");
-  const [newPosition, setNewPosition] = useState("");
   const [selectedStaff, setSelectedStaff] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -90,6 +89,7 @@ const Staff = () => {
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
   const navigate = useNavigate();
 
+  // Office start time and late threshold
   const officeStartTime = "09:00";
   const lateThreshold = "09:15";
 
@@ -109,12 +109,11 @@ const Staff = () => {
     });
 
     try {
-      // Fetch staff data
-      const { data: staffData, error: staffError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("role", "trainer");
-      if (staffError) throw staffError;
+      // Fetch staff members from the 'staffs' table
+      const { data: staffsData, error: staffsError } = await supabase
+        .from("staffs")
+        .select("*");
+      if (staffsError) throw staffsError;
 
       // Fetch access logs for the selected month
       const { data: accessLogs, error: logsError } = await supabase
@@ -124,17 +123,16 @@ const Staff = () => {
         .lte("timestamp", lastRelevantDay.toISOString());
       if (logsError) throw logsError;
 
-      // Create a map to hold attendance data per staff
-      const staffMap = staffData.reduce((acc, staff) => {
-        acc[staff.id] = {
-          id: staff.id,
-          name: staff.name,
-          department: staff.department || "N/A",
-          position: staff.position || "N/A",
+      // Create a map to hold attendance data per staff member
+      const attendanceMap = staffsData.reduce((acc, staff) => {
+        acc[staff.user_id] = {
+          id: staff.user_id,
+          name: staff.username,
+          role: staff.role || "Staff",
           daysPresent: 0,
           daysLate: 0,
           daysAbsent: daysInMonth.length,
-          totalCheckInTime: 0,
+          totalCheckInMinutes: 0,
           checkInCount: 0,
           status: "Absent",
           checkIn: "-",
@@ -145,91 +143,115 @@ const Staff = () => {
 
       // Process each day in the month
       for (const day of daysInMonth) {
-        const dayStart = new Date(day);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(day);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        // Filter logs for the day
-        const dayLogs = accessLogs.filter(
-          (log) =>
-            new Date(log.timestamp) >= dayStart &&
-            new Date(log.timestamp) <= dayEnd
-        );
-
-        for (const staff of staffData) {
-          const staffLogs = dayLogs.filter(
-            (log) => log.user_id === staff.id.toString()
-          );
+        for (const staff of staffsData) {
+          const staffLogs = accessLogs
+            .filter(
+              (log) =>
+                log.user_id === staff.user_id &&
+                isSameDay(parseISO(log.timestamp), day)
+            )
+            .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
           if (staffLogs.length > 0) {
-            // Assume the first log is check-in and the last is check-out
-            const checkInLog = staffLogs[0];
-            const checkOutLog = staffLogs[staffLogs.length - 1];
+            let checkInTime = null;
+            let checkOutTime = null;
+            let isCheckIn = true;
 
-            const checkInTime = format(
-              parseISO(checkInLog.timestamp),
-              "HH:mm"
-            );
-            const checkOutTime = format(
-              parseISO(checkOutLog.timestamp),
-              "HH:mm"
-            );
+            // Process logs in pairs
+            for (let i = 0; i < staffLogs.length; i++) {
+              const log = staffLogs[i];
+              const timestamp = parseISO(log.timestamp);
+
+              if (isCheckIn) {
+                // Check-in
+                if (!checkInTime || timestamp < checkInTime) {
+                  checkInTime = timestamp;
+                }
+              } else {
+                // Check-out
+                if (!checkOutTime || timestamp > checkOutTime) {
+                  checkOutTime = timestamp;
+                }
+              }
+
+              isCheckIn = !isCheckIn; // Toggle between check-in and check-out
+            }
+
+            // Handle unmatched check-in (odd number of logs)
+            if (!checkOutTime && checkInTime) {
+              checkOutTime = endOfDay(checkInTime);
+            }
+
+            const checkInTimeStr = checkInTime
+              ? format(checkInTime, "HH:mm")
+              : "-";
+            const checkOutTimeStr = checkOutTime
+              ? format(checkOutTime, "HH:mm")
+              : "-";
+
+            // Determine status based on check-in time
+            const checkInTotalMinutes =
+              checkInTime.getHours() * 60 + checkInTime.getMinutes();
+
+            const [lateThresholdHours, lateThresholdMinutes] = lateThreshold
+              .split(":")
+              .map(Number);
+            const lateThresholdTotalMinutes =
+              lateThresholdHours * 60 + lateThresholdMinutes;
 
             const status =
-              checkInTime <= lateThreshold ? "Present" : "Late";
+              checkInTotalMinutes <= lateThresholdTotalMinutes
+                ? "Present"
+                : "Late";
 
-            staffMap[staff.id].daysAbsent -= 1;
-            staffMap[staff.id].daysPresent += 1;
+            // Update attendance data
+            attendanceMap[staff.user_id].daysAbsent -= 1;
+            attendanceMap[staff.user_id].daysPresent += 1;
             if (status === "Late") {
-              staffMap[staff.id].daysLate += 1;
+              attendanceMap[staff.user_id].daysLate += 1;
             }
-            staffMap[staff.id].totalCheckInTime +=
-              parseFloat(checkInTime.split(":")[0]) +
-              parseFloat(checkInTime.split(":")[1]) / 60;
-            staffMap[staff.id].checkInCount += 1;
+            attendanceMap[staff.user_id].totalCheckInMinutes +=
+              checkInTotalMinutes;
+            attendanceMap[staff.user_id].checkInCount += 1;
 
             if (isSameDay(day, today)) {
-              staffMap[staff.id].status = status;
-              staffMap[staff.id].checkIn = checkInTime;
-              staffMap[staff.id].checkOut = checkOutTime;
+              attendanceMap[staff.user_id].status = status;
+              attendanceMap[staff.user_id].checkIn = checkInTimeStr;
+              attendanceMap[staff.user_id].checkOut = checkOutTimeStr;
             }
           }
         }
       }
 
       // Calculate average check-in time
-      Object.values(staffMap).forEach((staff) => {
-        staff.averageCheckIn =
-          staff.checkInCount > 0
-            ? format(
-                new Date(
-                  0,
-                  0,
-                  0,
-                  0,
-                  Math.round(
-                    (staff.totalCheckInTime / staff.checkInCount) * 60
-                  )
-                ),
-                "HH:mm"
-              )
-            : "-";
+      Object.values(attendanceMap).forEach((staff) => {
+        if (staff.checkInCount > 0) {
+          const avgCheckInMinutes = Math.round(
+            staff.totalCheckInMinutes / staff.checkInCount
+          );
+          const avgHours = Math.floor(avgCheckInMinutes / 60);
+          const avgMinutes = avgCheckInMinutes % 60;
+          staff.averageCheckIn = `${String(avgHours).padStart(2, "0")}:${String(
+            avgMinutes
+          ).padStart(2, "0")}`;
+        } else {
+          staff.averageCheckIn = "-";
+        }
       });
 
-      const staffList = Object.values(staffMap);
-      const presentCount = staffList.filter(
+      const attendanceList = Object.values(attendanceMap);
+      const presentCount = attendanceList.filter(
         (staff) => staff.status === "Present" || staff.status === "Late"
       ).length;
-      const lateCount = staffList.filter(
+      const lateCount = attendanceList.filter(
         (staff) => staff.status === "Late"
       ).length;
-      const absentCount = staffList.filter(
+      const absentCount = attendanceList.filter(
         (staff) => staff.status === "Absent"
       ).length;
 
-      setAttendanceData(staffList);
-      setTotalStaff(staffData.length);
+      setAttendanceData(attendanceList);
+      setTotalStaff(staffsData.length);
       setPresent(presentCount);
       setLate(lateCount);
       setAbsent(absentCount);
@@ -240,20 +262,31 @@ const Staff = () => {
 
   const handleAddStaff = async () => {
     if (newStaffName.trim()) {
-      const { data, error } = await supabase.from("users").insert([
+      const newUserId = `USR${Math.floor(Math.random() * 1000000)}`;
+
+      const { data, error } = await supabase.from("staffs").insert([
         {
-          name: newStaffName.trim(),
-          role: "trainer",
-          department: newDepartment.trim(),
-          position: newPosition.trim(),
+          username: newStaffName.trim(),
+          useremail: `${newStaffName
+            .trim()
+            .toLowerCase()
+            .replace(" ", ".")}@example.com`,
+          password: "password123", // In production, hash the password
+          role: "Staff",
+          mobile_number: "0000000000",
+          employee_code: `EMP${Math.floor(Math.random() * 1000000)}`,
+          start_date: new Date().toISOString(),
+          end_date: new Date(
+            new Date().setFullYear(new Date().getFullYear() + 1)
+          ).toISOString(),
+          user_id: newUserId,
+          active: true,
         },
       ]);
       if (error) {
         console.error("Error adding new staff:", error);
       } else {
         setNewStaffName("");
-        setNewDepartment("");
-        setNewPosition("");
         setIsDialogOpen(false); // Close the dialog after saving
         fetchAttendanceDataForMonth(); // Refresh attendance data after adding a staff member
       }
@@ -261,19 +294,13 @@ const Staff = () => {
   };
 
   const handleEditStaff = async () => {
-    if (
-      selectedStaff.name &&
-      selectedStaff.department &&
-      selectedStaff.position
-    ) {
+    if (selectedStaff.name) {
       const { error } = await supabase
-        .from("users")
+        .from("staffs")
         .update({
-          name: selectedStaff.name,
-          department: selectedStaff.department,
-          position: selectedStaff.position,
+          username: selectedStaff.name,
         })
-        .eq("id", selectedStaff.id);
+        .eq("user_id", selectedStaff.id);
 
       if (error) {
         console.error("Error updating staff:", error);
@@ -287,9 +314,9 @@ const Staff = () => {
   const handleDeleteStaff = async () => {
     if (selectedStaff) {
       const { error } = await supabase
-        .from("users")
+        .from("staffs")
         .delete()
-        .eq("id", selectedStaff.id);
+        .eq("user_id", selectedStaff.id);
       if (error) {
         console.error("Error deleting staff:", error);
       } else {
@@ -335,17 +362,13 @@ const Staff = () => {
     <div>
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold ml-2 md:-ml-0">Staff Attendance</h1>
-        <div className="flex items-center space-x-4">
-         
-        </div>
+        <div className="flex items-center space-x-4"></div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Staff
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -422,24 +445,11 @@ const Staff = () => {
                     placeholder="Staff Name"
                     value={newStaffName}
                     onChange={(e) => setNewStaffName(e.target.value)}
-                    className="mb-2"
-                  />
-                  <Input
-                    placeholder="Department"
-                    value={newDepartment}
-                    onChange={(e) => setNewDepartment(e.target.value)}
-                    className="mb-2"
-                  />
-                  <Input
-                    placeholder="Position"
-                    value={newPosition}
-                    onChange={(e) => setNewPosition(e.target.value)}
                     className="mb-4"
                   />
                   <Button onClick={handleAddStaff}>Add Staff</Button>
                 </DialogContent>
               </Dialog>
-            
             </div>
           </div>
         </CardHeader>
@@ -467,7 +477,7 @@ const Staff = () => {
                 >
                   <TableCell className="font-medium">{record.name}</TableCell>
                   <TableCell>
-                    {new Date().toISOString().split("T")[0]}
+                    {format(new Date(), "yyyy-MM-dd")}
                   </TableCell>
                   <TableCell>{record.checkIn}</TableCell>
                   <TableCell>{record.checkOut}</TableCell>
@@ -545,28 +555,6 @@ const Staff = () => {
             onChange={(e) =>
               setSelectedStaff({ ...selectedStaff, name: e.target.value })
             }
-            className="mb-2"
-          />
-          <Input
-            placeholder="Department"
-            value={selectedStaff?.department || ""}
-            onChange={(e) =>
-              setSelectedStaff({
-                ...selectedStaff,
-                department: e.target.value,
-              })
-            }
-            className="mb-2"
-          />
-          <Input
-            placeholder="Position"
-            value={selectedStaff?.position || ""}
-            onChange={(e) =>
-              setSelectedStaff({
-                ...selectedStaff,
-                position: e.target.value,
-              })
-            }
             className="mb-4"
           />
           <Button onClick={handleEditStaff}>Save</Button>
@@ -584,8 +572,8 @@ const Staff = () => {
               Are you sure you want to delete this staff member?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone and will permanently delete the
-              staff member.
+              This action cannot be undone and will permanently delete the staff
+              member.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

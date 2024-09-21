@@ -1,0 +1,131 @@
+create table
+  public.access_logs (
+    uid serial not null,
+    user_id character varying(255) not null,
+    timestamp timestamp without time zone not null,
+    status integer not null,
+    punch integer not null,
+    constraint access_logs_pkey primary key (uid)
+  ) tablespace pg_default;
+
+create table
+  public.staffs (
+    id serial not null,
+    username character varying(255) not null,
+    useremail character varying(255) not null,
+    password character varying(255) not null,
+    role character varying(50) not null,
+    mobile_number character varying(15) not null,
+    employee_code character varying(50) not null,
+    active boolean null default true,
+    start_date timestamp with time zone not null,
+    end_date timestamp with time zone not null,
+    user_id text not null,
+    salary numeric null,
+    constraint staffs_pkey primary key (id),
+    constraint staffs_employee_code_key unique (employee_code),
+    constraint staffs_useremail_key unique (useremail)
+  ) tablespace pg_default;
+
+create trigger check_end_date_trigger before insert
+or
+update on staffs for each row
+execute function update_active_status ();
+
+
+create table
+  public.equipment (
+    id serial not null,
+    equipment_name character varying(255) not null,
+    model character varying(255) null,
+    serial_number character varying(255) null,
+    purchase_date date null,
+    cost numeric(10, 2) null,
+    depreciation_rate numeric(5, 2) null,
+    current_value numeric(10, 2) null,
+    maintenance_schedule character varying(255) null,
+    last_maintenance_date date null,
+    next_maintenance_date date null,
+    constraint equipment_pkey primary key (id)
+  ) tablespace pg_default;
+
+
+create table
+  public.users (
+    id serial not null,
+    user_id character varying(255) not null,
+    active boolean null default false,
+    subscription_end date null,
+    name character varying(255) not null,
+    date_of_birth date null,
+    mobile_number_1 character varying(15) null,
+    mobile_number_2 character varying(15) null,
+    emergency_contact_number character varying(15) null,
+    blood_group character varying(10) null,
+    medical_conditions text null,
+    allergies text null,
+    injuries text null,
+    current_medications text null,
+    fitness_goals text null,
+    role character varying(50) null,
+    email character varying(255) not null,
+    constraint users_pkey primary key (id),
+    constraint users_email_unique unique (email),
+    constraint users_user_id_key unique (user_id)
+  ) tablespace pg_default;
+
+
+  create table
+  public.lead_sources (
+    id serial not null,
+    name text not null,
+    created_at timestamp with time zone null default now(),
+    constraint lead_sources_pkey primary key (id),
+    constraint lead_sources_name_key unique (name)
+  ) tablespace pg_default;
+
+-- 1. Drop Existing Tables and Constraints if they exist
+DROP TABLE IF EXISTS public.memberships CASCADE;
+DROP TABLE IF EXISTS public.membership_plans CASCADE;
+DROP TABLE IF EXISTS public.payment_modes CASCADE;
+
+-- 2. Create `payment_modes` Table
+CREATE TABLE public.payment_modes (
+    id serial NOT NULL,
+    name text NOT NULL, -- Payment mode name (e.g., cash, credit card)
+    created_at timestamp with time zone NULL DEFAULT now(),
+    CONSTRAINT payment_modes_pkey PRIMARY KEY (id),
+    CONSTRAINT payment_modes_name_key UNIQUE (name)
+) TABLESPACE pg_default;
+
+-- 3. Create `membership_plans` Table
+CREATE TABLE public.membership_plans (
+    id serial NOT NULL,
+    name text NOT NULL, -- Plan name (e.g., Monthly, Two-Month, Yearly)
+    duration_in_months integer NOT NULL, -- Duration of the plan in months
+    base_price numeric(10, 2) NOT NULL, -- Base price for the plan
+    created_at timestamp with time zone NULL DEFAULT now(),
+    CONSTRAINT membership_plans_pkey PRIMARY KEY (id),
+    CONSTRAINT membership_plans_name_key UNIQUE (name)
+) TABLESPACE pg_default;
+
+-- 4. Create `memberships` Table
+CREATE TABLE public.memberships (
+    id serial NOT NULL,
+    user_id integer NOT NULL, -- User purchasing the membership
+    membership_plan_id integer NOT NULL, -- The membership plan chosen
+    payment_mode_id integer NOT NULL, -- The payment mode used
+    start_date date NOT NULL, -- Membership start date
+    end_date date NOT NULL, -- Membership end date (extended by plan duration)
+    admission_or_renewal_fee numeric(10, 2) NOT NULL DEFAULT 0, -- Admission or renewal fee
+    additional_fee numeric(10, 2) NOT NULL DEFAULT 0, -- Additional fee if applicable
+    gst_percentage numeric(5, 2) NOT NULL, -- GST percentage entered by the user
+    credit_used numeric(10, 2) NOT NULL DEFAULT 0, -- Credit used by the user
+    total_amount numeric(10, 2) NOT NULL, -- Total amount after applying all calculations (handled by JS)
+    payment_date timestamp with time zone NOT NULL DEFAULT now(), -- Date of payment
+    created_at timestamp with time zone NULL DEFAULT now(),
+    CONSTRAINT memberships_pkey PRIMARY KEY (id),
+    CONSTRAINT memberships_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
+    CONSTRAINT memberships_membership_plan_id_fkey FOREIGN KEY (membership_plan_id) REFERENCES public.membership_plans(id) ON DELETE CASCADE,
+    CONSTRAINT memberships_payment_mode_id_fkey FOREIGN KEY (payment_mode_id) REFERENCES public.payment_modes(id) ON DELETE SET NULL
+) TABLESPACE pg_default;
