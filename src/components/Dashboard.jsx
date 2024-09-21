@@ -1,5 +1,3 @@
-// Dashboard.jsx
-
 import React, { useState, useEffect } from 'react';
 import {
   Card,
@@ -9,7 +7,6 @@ import {
 } from '@/components/ui/card';
 import { supabase } from '../supabaseClient';
 import {
-  format,
   startOfDay,
   endOfDay,
   startOfWeek,
@@ -19,7 +16,8 @@ import {
   startOfYear,
   endOfYear,
 } from 'date-fns';
-import { Users, UserCheck, DollarSign, Activity } from 'lucide-react';
+import { Users, UserCheck, Activity } from 'lucide-react';
+import CurrencyRupeeIcon from '@mui/icons-material/CurrencyRupee'; // Importing Rupee Icon
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -41,18 +39,17 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Get current date and time intervals
       const now = new Date();
       const todayStart = startOfDay(now);
       const todayEnd = endOfDay(now);
-      const weekStart = startOfWeek(now, { weekStartsOn: 1 }); // Assuming week starts on Monday
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
       const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
       const monthStart = startOfMonth(now);
       const monthEnd = endOfMonth(now);
       const yearStart = startOfYear(now);
       const yearEnd = endOfYear(now);
 
-      // 1. Number of people who joined today
+      // Fetch the number of users joined today
       const { data: joinedTodayData, error: joinedTodayError } = await supabase
         .from('users')
         .select('id')
@@ -61,7 +58,7 @@ const Dashboard = () => {
       if (joinedTodayError) throw joinedTodayError;
       const joinedToday = joinedTodayData.length;
 
-      // 2. Number of people who joined this week
+      // Fetch the number of users who joined this week
       const { data: joinedThisWeekData, error: joinedThisWeekError } = await supabase
         .from('users')
         .select('id')
@@ -70,7 +67,7 @@ const Dashboard = () => {
       if (joinedThisWeekError) throw joinedThisWeekError;
       const joinedThisWeek = joinedThisWeekData.length;
 
-      // 3. Number of people who joined this month
+      // Fetch the number of users who joined this month
       const { data: joinedThisMonthData, error: joinedThisMonthError } = await supabase
         .from('users')
         .select('id')
@@ -79,7 +76,7 @@ const Dashboard = () => {
       if (joinedThisMonthError) throw joinedThisMonthError;
       const joinedThisMonth = joinedThisMonthData.length;
 
-      // 4. Number of people who joined this year
+      // Fetch the number of users who joined this year
       const { data: joinedThisYearData, error: joinedThisYearError } = await supabase
         .from('users')
         .select('id')
@@ -88,7 +85,7 @@ const Dashboard = () => {
       if (joinedThisYearError) throw joinedThisYearError;
       const joinedThisYear = joinedThisYearData.length;
 
-      // 5. Members currently present at the gym
+      // Fetch currently present members (based on access_logs)
       const { data: currentAccessLogs, error: currentAccessLogsError } = await supabase
         .from('access_logs')
         .select('user_id, timestamp')
@@ -111,49 +108,49 @@ const Dashboard = () => {
           .map((ts) => new Date(ts))
           .sort((a, b) => a - b);
         if (timestamps.length % 2 !== 0) {
-          // Odd number of logs means the member is currently in the gym
-          currentlyPresent += 1;
+          currentlyPresent += 1; // Odd number of logs means the member is still in the gym
         }
       }
 
-      // 6. Number of members who were present today
+      // Number of members present today
       const presentToday = Object.keys(presenceMap).length;
 
-      // 7. Number of subscriptions or membership plans sold today
+      // Fetch the number of subscriptions sold today
       const { data: subscriptionsTodayData, error: subscriptionsTodayError } = await supabase
-        .from('subscriptions')
+        .from('memberships')
         .select('id')
-        .gte('created_at', todayStart.toISOString())
-        .lte('created_at', todayEnd.toISOString());
+        .gte('payment_date', todayStart.toISOString())
+        .lte('payment_date', todayEnd.toISOString());
       if (subscriptionsTodayError) throw subscriptionsTodayError;
       const subscriptionsSoldToday = subscriptionsTodayData.length;
 
-      // 8. Total credit (assuming total amount owed by members)
+      // Fetch total credit (credit used in memberships)
       const { data: totalCreditData, error: totalCreditError } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('status', 'pending');
+        .from('memberships')
+        .select('credit_used');
       if (totalCreditError) throw totalCreditError;
-      const totalCredit = totalCreditData.reduce((acc, curr) => acc + curr.amount, 0);
+      const totalCredit = totalCreditData.reduce((acc, curr) => acc + curr.credit_used, 0);
 
-      // 9. Total revenue (sum of all payments)
+      // Fetch total revenue (total amount paid for memberships)
       const { data: totalRevenueData, error: totalRevenueError } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('status', 'completed');
+        .from('memberships')
+        .select('total_amount');
       if (totalRevenueError) throw totalRevenueError;
-      const totalRevenue = totalRevenueData.reduce((acc, curr) => acc + curr.amount, 0);
+      const totalRevenue = totalRevenueData.reduce((acc, curr) => acc + curr.total_amount, 0);
 
-      // 10. Current value of all equipment
+      // Fetch total equipment value (sum of current_value column)
       const { data: equipmentData, error: equipmentError } = await supabase
-        .from('equipments')
-        .select('value, quantity');
+        .from('equipment')
+        .select('current_value');
       if (equipmentError) throw equipmentError;
+
+      // Calculate the total value of all equipment
       const totalEquipmentValue = equipmentData.reduce(
-        (acc, curr) => acc + curr.value * curr.quantity,
+        (acc, curr) => acc + (curr.current_value || 0),
         0
       );
 
+      // Update state with the fetched data
       setStats({
         joinedToday,
         joinedThisWeek,
@@ -172,7 +169,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div>
+    <div className="mx-8 my-4"> {/* Added left and right margins */}
       <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
@@ -246,7 +243,7 @@ const Dashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Subscriptions Sold Today</CardTitle>
-            <DollarSign className="h-4 w-4 text-yellow-600" />
+            <CurrencyRupeeIcon className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.subscriptionsSoldToday}</div>
@@ -257,10 +254,10 @@ const Dashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-600" />
+            <CurrencyRupeeIcon className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">₹{stats.totalRevenue.toFixed(2)}</div>
           </CardContent>
         </Card>
 
@@ -268,10 +265,10 @@ const Dashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Credit</CardTitle>
-            <DollarSign className="h-4 w-4 text-red-600" />
+            <CurrencyRupeeIcon className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.totalCredit.toFixed(2)}</div>
+            <div className="text-2xl font-bold">₹{stats.totalCredit.toFixed(2)}</div>
           </CardContent>
         </Card>
 
@@ -279,12 +276,10 @@ const Dashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Equipment Value</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <CurrencyRupeeIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              ${stats.totalEquipmentValue.toFixed(2)}
-            </div>
+            <div className="text-2xl font-bold">₹{stats.totalEquipmentValue.toFixed(2)}</div>
           </CardContent>
         </Card>
       </div>

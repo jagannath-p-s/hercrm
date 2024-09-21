@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
 import {
   TextField,
   IconButton,
@@ -21,8 +20,6 @@ import {
   InputAdornment,
   Menu,
   MenuItem,
-  Checkbox,
-  FormControlLabel,
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -33,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { supabase } from '../supabaseClient';
 
 const Equipment = () => {
   const [equipmentList, setEquipmentList] = useState([]);
@@ -212,9 +210,8 @@ const Equipment = () => {
     setSnackbar({ open: false, message: '', severity: 'success' });
   };
 
-  // Calculate total number of equipment and total cost
-  const totalEquipment = equipmentList.length;
-  const totalCost = equipmentList.reduce((sum, item) => sum + (item.cost || 0), 0).toFixed(2);
+  // **Calculate total current value of all equipment instead of total cost**
+  const totalCurrentValue = equipmentList.reduce((sum, item) => sum + (parseFloat(item.current_value) || 0), 0).toFixed(2);
 
   // Download menu handling
   const handleDownloadClick = (event) => {
@@ -328,10 +325,11 @@ const Equipment = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center py-3">
             <div className="flex flex-col sm:flex-row items-center">
-              <h1 className="text-xl font-semibold ml-2 mb-2 sm:mb-0">Equipment Management</h1>
+            
               <div className="ml-0 sm:ml-4 text-gray-600">
-                <span>Total Equipment: {totalEquipment}</span>
-                <span className="ml-4">Total Cost: {totalCost}</span>
+                {/* Display Total Equipment and Total Current Value */}
+                <span> Equipments : {equipmentList.length}</span>
+                <span className="ml-4"> Current Value : ₹{totalCurrentValue}</span>
               </div>
             </div>
             <div className="flex items-center space-x-2">
