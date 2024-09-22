@@ -15,13 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  Users,
-  UserCheck,
-  Clock,
-  XCircle,
-  MoreVertical,
-} from "lucide-react";
+import { Users, UserCheck, Clock, XCircle, MoreVertical } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
@@ -50,6 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, min, endOfDay } from "date-fns";
+import bcrypt from "bcryptjs"; // Import bcrypt for password hashing
 
 const Staff = () => {
   const [attendanceData, setAttendanceData] = useState([]);
@@ -198,7 +193,7 @@ const Staff = () => {
     }
   };
 
-  // Automatically fetch attendance logs when the month is changed
+  // View Attendance
   useEffect(() => {
     if (isViewAttendanceOpen) {
       openViewAttendance(selectedStaff);
@@ -206,8 +201,8 @@ const Staff = () => {
   }, [attendanceMonth]);
 
   const openViewAttendance = async (staff) => {
-    setSelectedStaff(staff); // Set selected staff
-    setIsViewAttendanceOpen(true); // Open dialog
+    setSelectedStaff(staff);
+    setIsViewAttendanceOpen(true);
     const [month, year] = attendanceMonth.split(" ");
     const firstDay = startOfMonth(new Date(`${month} 1, ${year}`));
     const lastDay = endOfMonth(firstDay);
@@ -244,50 +239,96 @@ const Staff = () => {
     }, {});
   };
 
-  const handleEditStaff = async () => {
-    if (selectedStaff.name) {
-      const { error } = await supabase
-        .from("staffs")
-        .update({
-          username: selectedStaff.name,
-        })
-        .eq("user_id", selectedStaff.id);
+  // Edit Staff
+  const openEditDialog = (staff) => {
+    setSelectedStaff({
+      id: staff.id,
+      username: staff.name,
+      useremail: staff.useremail || "",
+      password: "",
+      role: staff.role,
+      mobile_number: staff.mobile_number || "",
+      employee_code: staff.employee_code || "",
+      salary: staff.salary || "",
+    });
+    setIsEditDialogOpen(true);
+  };
 
-      if (error) {
-        console.error("Error updating staff:", error);
-      } else {
-        setIsEditDialogOpen(false);
-        fetchAttendanceDataForMonth();
+  const handleEditStaff = async () => {
+    if (selectedStaff.username.trim()) {
+      try {
+        let updates = {
+          username: selectedStaff.username.trim(),
+          useremail: selectedStaff.useremail.trim(),
+          role: selectedStaff.role,
+          mobile_number: selectedStaff.mobile_number,
+          employee_code: selectedStaff.employee_code,
+          salary: selectedStaff.salary ? parseFloat(selectedStaff.salary) : null,
+        };
+
+        if (selectedStaff.password) {
+          const salt = bcrypt.genSaltSync(12);
+          const hashedPassword = bcrypt.hashSync(selectedStaff.password, salt);
+          updates.password = hashedPassword;
+        }
+
+        const { error } = await supabase
+          .from("staffs")
+          .update(updates)
+          .eq("user_id", selectedStaff.id);
+
+        if (error) {
+          console.error("Error updating staff:", error);
+        } else {
+          setIsEditDialogOpen(false);
+          fetchAttendanceDataForMonth();
+        }
+      } catch (err) {
+        console.error("Error hashing password:", err.message);
       }
     }
   };
 
+  // Add Staff
   const handleAddStaff = async () => {
     if (newStaff.username.trim()) {
-      const newUserId = `USR${Math.floor(Math.random() * 1000000)}`;
-      const { data, error } = await supabase.from("staffs").insert([
-        {
-          username: newStaff.username.trim(),
-          useremail: newStaff.useremail.trim(),
-          password: newStaff.password,
-          role: newStaff.role,
-          mobile_number: newStaff.mobile_number,
-          employee_code: newStaff.employee_code,
-          salary: newStaff.salary ? parseFloat(newStaff.salary) : null,
-          start_date: new Date().toISOString(),
-          end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
-          user_id: newUserId,
-          active: true,
-        },
-      ]);
-      if (error) {
-        console.error("Error adding new staff:", error);
-      } else {
-        setNewStaff({ username: "", useremail: "", password: "", role: "Staff", mobile_number: "", employee_code: "", salary: "" });
-        setIsDialogOpen(false);
-        fetchAttendanceDataForMonth();
+      try {
+        const salt = bcrypt.genSaltSync(12);
+        const hashedPassword = bcrypt.hashSync(newStaff.password, salt);
+
+        const newUserId = `USR${Math.floor(Math.random() * 1000000)}`;
+        const { data, error } = await supabase.from("staffs").insert([
+          {
+            username: newStaff.username.trim(),
+            useremail: newStaff.useremail.trim(),
+            password: hashedPassword,
+            role: newStaff.role,
+            mobile_number: newStaff.mobile_number,
+            employee_code: newStaff.employee_code,
+            salary: newStaff.salary ? parseFloat(newStaff.salary) : null,
+            start_date: new Date().toISOString(),
+            end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
+            user_id: newUserId,
+            active: true,
+          },
+        ]);
+        if (error) {
+          console.error("Error adding new staff:", error);
+        } else {
+          setNewStaff({ username: "", useremail: "", password: "", role: "Staff", mobile_number: "", employee_code: "", salary: "" });
+          setIsDialogOpen(false);
+          fetchAttendanceDataForMonth();
+        }
+      } catch (err) {
+        console.error("Error hashing password:", err.message);
       }
     }
+  };
+
+  // Delete Staff
+  const openDeleteDialog = (staff) => {
+    setSelectedStaff(staff);
+    setIsAlertDialogOpen(true);
   };
 
   const handleDeleteStaff = async () => {
@@ -422,7 +463,7 @@ const Staff = () => {
                 <TableHead>Days Present</TableHead>
                 <TableHead>Days Absent</TableHead>
                 <TableHead>Days Late</TableHead>
-                <TableHead>Avg Check-in</TableHead>
+                {/* <TableHead>Avg Check-in</TableHead> */}
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -448,7 +489,7 @@ const Staff = () => {
                     <TableCell className="text-center">{record.daysPresent}</TableCell>
                     <TableCell className="text-center">{record.daysAbsent}</TableCell>
                     <TableCell className="text-center">{record.daysLate}</TableCell>
-                    <TableCell className="text-center">{record.averageCheckIn}</TableCell>
+                    {/* <TableCell className="text-center">{record.averageCheckIn}</TableCell> */}
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -456,7 +497,7 @@ const Staff = () => {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start">
                           <DropdownMenuItem onClick={() => openViewAttendance(record)}>View</DropdownMenuItem>
-                          {/* <DropdownMenuItem onClick={() => openEditDialog(record)}>Edit</DropdownMenuItem> */}
+                          <DropdownMenuItem onClick={() => openEditDialog(record)}>Edit</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openDeleteDialog(record)}>Delete</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -506,13 +547,40 @@ const Staff = () => {
                 Object.keys(staffAttendance).map((date, index) => (
                   <TableRow key={index}>
                     <TableCell>{date}</TableCell>
-                    <TableCell>{staffAttendance[date].checkOut || "-"}</TableCell>
                     <TableCell>{staffAttendance[date].checkIn || "-"}</TableCell>
+                    <TableCell>{staffAttendance[date].checkOut || "-"}</TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Staff Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Staff</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <Input placeholder="Staff Name" value={selectedStaff.username} onChange={(e) => setSelectedStaff({ ...selectedStaff, username: e.target.value })} />
+            <Input placeholder="Email" value={selectedStaff.useremail} onChange={(e) => setSelectedStaff({ ...selectedStaff, useremail: e.target.value })} />
+            <Input placeholder="Password" type="password" value={selectedStaff.password} onChange={(e) => setSelectedStaff({ ...selectedStaff, password: e.target.value })} />
+            <Input placeholder="Mobile Number" value={selectedStaff.mobile_number} onChange={(e) => setSelectedStaff({ ...selectedStaff, mobile_number: e.target.value })} />
+            <Input placeholder="Employee Code" value={selectedStaff.employee_code} onChange={(e) => setSelectedStaff({ ...selectedStaff, employee_code: e.target.value })} />
+            <Input placeholder="Salary" type="number" value={selectedStaff.salary} onChange={(e) => setSelectedStaff({ ...selectedStaff, salary: e.target.value })} />
+            <Select value={selectedStaff.role} onValueChange={(value) => setSelectedStaff({ ...selectedStaff, role: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select Role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Admin">Admin</SelectItem>
+                <SelectItem value="Staff">Staff</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={handleEditStaff} className="mt-4">Save Changes</Button>
         </DialogContent>
       </Dialog>
 

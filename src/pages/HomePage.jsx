@@ -1,5 +1,3 @@
-// HomePage.js
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Menu as MenuIcon,
@@ -28,6 +26,7 @@ import Equipment from '../components/Equipment';
 import Users from '../components/Users';
 import Salary from '../components/Salary';
 import AccountBoxIcon from '@mui/icons-material/AccountBox';
+
 const HomePage = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -86,6 +85,7 @@ const HomePage = () => {
     };
   }, [handleClickOutside]);
 
+  // Sidebar navigation items
   const navItems = [
     { icon: <DashboardIcon />, tooltip: 'Dashboard', component: 'Dashboard' },
     { icon: <GroupIcon />, tooltip: 'Contacts', component: 'Contacts' },
@@ -94,11 +94,16 @@ const HomePage = () => {
     { icon: <CoPresentIcon />, tooltip: 'Attendance', component: 'Attendance' },
     { icon: <WorkIcon />, tooltip: 'Staff', component: 'Staff' },
     { icon: <FitnessCenterIcon />, tooltip: 'Equipment', component: 'Equipment' },
-    { icon: <AccountBoxIcon />, tooltip: 'Users', component: 'Users' },    // Add Users here
-    { icon: <LocalAtmIcon />, tooltip: 'Salary', component: 'Salary' },    // Add Salary here
+    // Admin-specific items
+    ...(staff?.role === 'Admin'
+      ? [
+          { icon: <AccountBoxIcon />, tooltip: 'Users', component: 'Users' }, // Users visible only for Admin
+          { icon: <LocalAtmIcon />, tooltip: 'Salary', component: 'Salary' }, // Salary visible only for Admin
+        ]
+      : []),
   ];
-  
 
+  // Render the appropriate component based on the active menu item
   const renderComponent = () => {
     switch (activeComponent) {
       case 'Dashboard':
@@ -115,15 +120,14 @@ const HomePage = () => {
         return <Staff />;
       case 'Equipment':
         return <Equipment />;
-      case 'Users':  // Add Users rendering logic
-        return <Users />;
-      case 'Salary': // Add Salary rendering logic
-        return <Salary />;
+      case 'Users':
+        return staff?.role === 'Admin' ? <Users /> : null; // Admin-only component
+      case 'Salary':
+        return staff?.role === 'Admin' ? <Salary /> : null; // Admin-only component
       default:
         return <Dashboard />;
     }
   };
-  
 
   const showSnackbar = useCallback((message, severity) => {
     setSnackbar({ open: true, message, severity });
@@ -149,6 +153,10 @@ const HomePage = () => {
         return 'Staff';
       case 'Equipment':
         return 'Equipment';
+      case 'Users':
+        return staff?.role === 'Admin' ? 'Users' : ''; // Only show for Admin
+      case 'Salary':
+        return staff?.role === 'Admin' ? 'Salary' : ''; // Only show for Admin
       default:
         return 'Dashboard';
     }
@@ -231,10 +239,6 @@ const HomePage = () => {
                   {staff?.username ? staff.username[0].toUpperCase() : 'S'}
                 </button>
                 <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-                  {/* <MenuItem onClick={handleMenuClose} className="flex items-center">
-                    <SettingsIcon className="mr-2" style={{ fontSize: '20px' }} />
-                    <span className="text-sm">Settings</span>
-                  </MenuItem> */}
                   <MenuItem
                     onClick={() => {
                       handleMenuClose();
