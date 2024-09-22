@@ -98,6 +98,27 @@ CREATE TABLE public.payment_modes (
     CONSTRAINT payment_modes_name_key UNIQUE (name)
 ) TABLESPACE pg_default;
 
+create table
+  public.memberships (
+    id serial not null,
+    user_id integer not null,
+    membership_plan_id integer not null,
+    payment_mode_id integer not null,
+    start_date date not null,
+    end_date date not null,
+    admission_or_renewal_fee numeric(10, 2) not null default 0,
+    additional_fee numeric(10, 2) not null default 0,
+    gst_percentage numeric(5, 2) not null,
+    credit_used numeric(10, 2) not null default 0,
+    total_amount numeric(10, 2) not null,
+    payment_date timestamp with time zone not null default now(),
+    created_at timestamp with time zone null default now(),
+    constraint memberships_pkey primary key (id),
+    constraint memberships_membership_plan_id_fkey foreign key (membership_plan_id) references membership_plans (id) on delete cascade,
+    constraint memberships_payment_mode_id_fkey foreign key (payment_mode_id) references payment_modes (id) on delete set null,
+    constraint memberships_user_id_fkey foreign key (user_id) references users (id) on delete cascade
+  ) tablespace pg_default;
+
 -- 3. Create `membership_plans` Table
 CREATE TABLE public.membership_plans (
     id serial NOT NULL,
@@ -108,24 +129,140 @@ CREATE TABLE public.membership_plans (
     CONSTRAINT membership_plans_pkey PRIMARY KEY (id),
     CONSTRAINT membership_plans_name_key UNIQUE (name)
 ) TABLESPACE pg_default;
+create table
+  public.memberships (
+    id serial not null,
+    user_id integer not null,
+    membership_plan_id integer not null,
+    payment_mode_id integer not null,
+    start_date date not null,
+    end_date date not null,
+    admission_or_renewal_fee numeric(10, 2) not null default 0,
+    additional_fee numeric(10, 2) not null default 0,
+    gst_percentage numeric(5, 2) not null,
+    credit_used numeric(10, 2) not null default 0,
+    total_amount numeric(10, 2) not null,
+    payment_date timestamp with time zone not null default now(),
+    created_at timestamp with time zone null default now(),
+    constraint memberships_pkey primary key (id),
+    constraint memberships_membership_plan_id_fkey foreign key (membership_plan_id) references membership_plans (id) on delete cascade,
+    constraint memberships_payment_mode_id_fkey foreign key (payment_mode_id) references payment_modes (id) on delete set null,
+    constraint memberships_user_id_fkey foreign key (user_id) references users (id) on delete cascade
+  ) tablespace pg_default;
 
--- 4. Create `memberships` Table
-CREATE TABLE public.memberships (
-    id serial NOT NULL,
-    user_id integer NOT NULL, -- User purchasing the membership
-    membership_plan_id integer NOT NULL, -- The membership plan chosen
-    payment_mode_id integer NOT NULL, -- The payment mode used
-    start_date date NOT NULL, -- Membership start date
-    end_date date NOT NULL, -- Membership end date (extended by plan duration)
-    admission_or_renewal_fee numeric(10, 2) NOT NULL DEFAULT 0, -- Admission or renewal fee
-    additional_fee numeric(10, 2) NOT NULL DEFAULT 0, -- Additional fee if applicable
-    gst_percentage numeric(5, 2) NOT NULL, -- GST percentage entered by the user
-    credit_used numeric(10, 2) NOT NULL DEFAULT 0, -- Credit used by the user
-    total_amount numeric(10, 2) NOT NULL, -- Total amount after applying all calculations (handled by JS)
-    payment_date timestamp with time zone NOT NULL DEFAULT now(), -- Date of payment
-    created_at timestamp with time zone NULL DEFAULT now(),
-    CONSTRAINT memberships_pkey PRIMARY KEY (id),
-    CONSTRAINT memberships_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
-    CONSTRAINT memberships_membership_plan_id_fkey FOREIGN KEY (membership_plan_id) REFERENCES public.membership_plans(id) ON DELETE CASCADE,
-    CONSTRAINT memberships_payment_mode_id_fkey FOREIGN KEY (payment_mode_id) REFERENCES public.payment_modes(id) ON DELETE SET NULL
-) TABLESPACE pg_default;
+  -- Create the `expense_categories` table
+CREATE TABLE public.expense_categories (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+
+-- Create the `incomes` table
+CREATE TABLE public.incomes (
+    id SERIAL PRIMARY KEY,
+    amount NUMERIC(10, 2) NOT NULL,
+    description TEXT,
+    income_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    user_id INTEGER, -- Optional: If income is linked to a user
+    membership_id INTEGER, -- Optional: If income is linked to a membership
+    payment_mode_id INTEGER, -- Optional: To record the payment mode
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
+    FOREIGN KEY (membership_id) REFERENCES memberships (id) ON DELETE SET NULL,
+    FOREIGN KEY (payment_mode_id) REFERENCES payment_modes (id) ON DELETE SET NULL
+);
+
+-- Create the `expenses` table
+CREATE TABLE public.expenses (
+    id SERIAL PRIMARY KEY,
+    amount NUMERIC(10, 2) NOT NULL,
+    description TEXT,
+    expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    category_id INTEGER, -- Optional: To categorize expenses
+    staff_id INTEGER, -- Optional: If expense is linked to a staff member
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    FOREIGN KEY (category_id) REFERENCES expense_categories (id) ON DELETE SET NULL,
+    FOREIGN KEY (staff_id) REFERENCES staffs (id) ON DELETE SET NULL
+);
+
+-- Create the `user_credits` table
+CREATE TABLE public.user_credits (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    total_credits NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    used_credits NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    available_credits NUMERIC(10, 2) GENERATED ALWAYS AS (total_credits - used_credits) STORED,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- Create the `staff_salaries` table
+CREATE TABLE public.staff_salaries (
+    id SERIAL PRIMARY KEY,
+    staff_id INTEGER NOT NULL,
+    scheduled_payment_date DATE NOT NULL,
+    actual_payment_date DATE,
+    base_salary NUMERIC(10, 2) NOT NULL,
+    advance_amount NUMERIC(10, 2) DEFAULT 0,
+    advance_date DATE,
+    deductions NUMERIC(10, 2) DEFAULT 0,
+    bonuses NUMERIC(10, 2) DEFAULT 0,
+    net_salary NUMERIC(10, 2) GENERATED ALWAYS AS (
+        base_salary + bonuses - deductions - advance_amount
+    ) STORED,
+    status VARCHAR(20) NOT NULL DEFAULT 'Pending', -- e.g., Pending, Paid
+    payment_mode_id INTEGER,
+    remarks TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    FOREIGN KEY (staff_id) REFERENCES staffs (id) ON DELETE CASCADE,
+    FOREIGN KEY (payment_mode_id) REFERENCES payment_modes (id) ON DELETE SET NULL
+);
+
+
+-- Function to get current staff inside
+CREATE OR REPLACE FUNCTION public.get_current_staff_inside()
+RETURNS TABLE(user_id text, is_inside boolean) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT al.user_id,
+           (COUNT(*) % 2) = 1 AS is_inside
+    FROM access_logs al
+    GROUP BY al.user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+-- Create the trigger function
+CREATE OR REPLACE FUNCTION update_incomes_on_membership_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.incomes (
+        amount,
+        description,
+        income_date,
+        user_id,
+        membership_id,
+        payment_mode_id,
+        created_at
+    ) VALUES (
+        NEW.total_amount,
+        'Membership Payment',
+        NEW.payment_date::date,
+        NEW.user_id,
+        NEW.id,
+        NEW.payment_mode_id,
+        NOW()
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create the trigger on the memberships table
+CREATE TRIGGER trigger_update_incomes
+AFTER INSERT ON public.memberships
+FOR EACH ROW
+EXECUTE FUNCTION update_incomes_on_membership_insert();

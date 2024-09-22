@@ -1,0 +1,154 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '../supabaseClient';
+import CurrencyRupeeIcon from '@mui/icons-material/CurrencyRupee';
+
+const Finance = () => {
+  const [financeStats, setFinanceStats] = useState({
+    totalIncome: 0,
+    totalExpenses: 0,
+    netBalance: 0,
+    totalSalaries: 0,
+  });
+  const [paidExpenses, setPaidExpenses] = useState([]);
+  const [unpaidExpenses, setUnpaidExpenses] = useState([]);
+
+  useEffect(() => {
+    fetchFinanceData();
+  }, []);
+
+  const fetchFinanceData = async () => {
+    try {
+      // Fetch total income
+      const { data: totalIncomeData } = await supabase
+        .from('incomes')
+        .select('amount');
+      const totalIncome = totalIncomeData.reduce((acc, curr) => acc + curr.amount, 0);
+
+      // Fetch total expenses
+      const { data: totalExpensesData } = await supabase
+        .from('expenses')
+        .select('amount');
+      const totalExpenses = totalExpensesData.reduce((acc, curr) => acc + curr.amount, 0);
+
+      // Fetch total salaries paid
+      const { data: totalSalariesData } = await supabase
+        .from('staff_salaries')
+        .select('net_salary');
+      const totalSalaries = totalSalariesData.reduce((acc, curr) => acc + curr.net_salary, 0);
+
+      // Calculate net balance
+      const netBalance = totalIncome - (totalExpenses + totalSalaries);
+
+      setFinanceStats({
+        totalIncome,
+        totalExpenses,
+        netBalance,
+        totalSalaries,
+      });
+
+      // Fetch paid expenses
+      const { data: paidExpensesData } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('status', 'paid');
+      setPaidExpenses(paidExpensesData);
+
+      // Fetch unpaid expenses
+      const { data: unpaidExpensesData } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('status', 'unpaid');
+      setUnpaidExpenses(unpaidExpensesData);
+    } catch (error) {
+      console.error('Error fetching finance data:', error);
+    }
+  };
+
+  return (
+    <div className="mx-8 my-4">
+      <h1 className="text-2xl font-bold mb-4">Finance Overview</h1>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
+        {/* Total Income */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Income</CardTitle>
+            <CurrencyRupeeIcon className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{financeStats.totalIncome.toFixed(2)}</div>
+          </CardContent>
+        </Card>
+
+        {/* Total Expenses */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+            <CurrencyRupeeIcon className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{financeStats.totalExpenses.toFixed(2)}</div>
+          </CardContent>
+        </Card>
+
+        {/* Total Salaries */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Salaries</CardTitle>
+            <CurrencyRupeeIcon className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{financeStats.totalSalaries.toFixed(2)}</div>
+          </CardContent>
+        </Card>
+
+        {/* Net Balance */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Net Balance</CardTitle>
+            <CurrencyRupeeIcon className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{financeStats.netBalance.toFixed(2)}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Paid Expenses */}
+      <div>
+        <h2 className="text-xl font-bold mb-2">Paid Expenses</h2>
+        {paidExpenses.map((expense) => (
+          <Card key={expense.id} className="mb-4">
+            <CardHeader>
+              <CardTitle>{expense.description || 'No description'}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg">₹{expense.amount.toFixed(2)}</div>
+              <div>Status: {expense.status}</div>
+              <div>Final Date to Pay: {expense.final_date_to_pay || 'N/A'}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Unpaid Expenses */}
+      <div>
+        <h2 className="text-xl font-bold mb-2">Unpaid Expenses</h2>
+        {unpaidExpenses.map((expense) => (
+          <Card key={expense.id} className="mb-4">
+            <CardHeader>
+              <CardTitle>{expense.description || 'No description'}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg">₹{expense.amount.toFixed(2)}</div>
+              <div>Status: {expense.status}</div>
+              <div>Final Date to Pay: {expense.final_date_to_pay || 'N/A'}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Finance;

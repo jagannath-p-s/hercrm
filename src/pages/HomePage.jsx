@@ -17,7 +17,7 @@ import { Tooltip, Menu, MenuItem, Snackbar, Alert, CircularProgress } from '@mui
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import { supabase } from '../supabaseClient';
-
+import LocalAtmIcon from '@mui/icons-material/LocalAtm';
 import Dashboard from '../components/Dashboard';
 import Contacts from '../components/Contacts';
 import Members from '../components/Members';
@@ -25,7 +25,9 @@ import Finance from '../components/Finance';
 import Attendance from '../components/Attendance';
 import Staff from '../components/Staff';
 import Equipment from '../components/Equipment';
-
+import Users from '../components/Users';
+import Salary from '../components/Salary';
+import AccountBoxIcon from '@mui/icons-material/AccountBox';
 const HomePage = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -92,7 +94,10 @@ const HomePage = () => {
     { icon: <CoPresentIcon />, tooltip: 'Attendance', component: 'Attendance' },
     { icon: <WorkIcon />, tooltip: 'Staff', component: 'Staff' },
     { icon: <FitnessCenterIcon />, tooltip: 'Equipment', component: 'Equipment' },
+    { icon: <AccountBoxIcon />, tooltip: 'Users', component: 'Users' },    // Add Users here
+    { icon: <LocalAtmIcon />, tooltip: 'Salary', component: 'Salary' },    // Add Salary here
   ];
+  
 
   const renderComponent = () => {
     switch (activeComponent) {
@@ -110,10 +115,15 @@ const HomePage = () => {
         return <Staff />;
       case 'Equipment':
         return <Equipment />;
+      case 'Users':  // Add Users rendering logic
+        return <Users />;
+      case 'Salary': // Add Salary rendering logic
+        return <Salary />;
       default:
         return <Dashboard />;
     }
   };
+  
 
   const showSnackbar = useCallback((message, severity) => {
     setSnackbar({ open: true, message, severity });
@@ -221,10 +231,10 @@ const HomePage = () => {
                   {staff?.username ? staff.username[0].toUpperCase() : 'S'}
                 </button>
                 <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-                  <MenuItem onClick={handleMenuClose} className="flex items-center">
+                  {/* <MenuItem onClick={handleMenuClose} className="flex items-center">
                     <SettingsIcon className="mr-2" style={{ fontSize: '20px' }} />
                     <span className="text-sm">Settings</span>
-                  </MenuItem>
+                  </MenuItem> */}
                   <MenuItem
                     onClick={() => {
                       handleMenuClose();

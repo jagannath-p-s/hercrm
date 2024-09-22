@@ -20,6 +20,7 @@ import MenuItem from '@mui/material/MenuItem';
 import InputLabel from '@mui/material/InputLabel';
 import FormControl from '@mui/material/FormControl';
 import EditIcon from '@mui/icons-material/Edit';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
 
 const Contacts = () => {
   const initialExpandedColumns = ['Lead', 'Follow-up', 'Customer Won', 'Customer Lost'];
@@ -38,11 +39,18 @@ const Contacts = () => {
     status: 'Lead',
   });
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterDays, setFilterDays] = useState(7); // Default to 7 days
+  const [filterDays, setFilterDays] = useState(null);
+  const [filterLeadSource, setFilterLeadSource] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState(
+    dayjs().subtract(2, 'month').format('YYYY-MM-DD')
+  );
+  const [filterEndDate, setFilterEndDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [filteredColumns, setFilteredColumns] = useState([]);
   const [leadSources, setLeadSources] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContact, setEditedContact] = useState(null);
+  const [addLeadSourceOpen, setAddLeadSourceOpen] = useState(false);
+  const [newLeadSourceName, setNewLeadSourceName] = useState('');
 
   useEffect(() => {
     fetchLeads();
@@ -51,7 +59,7 @@ const Contacts = () => {
 
   useEffect(() => {
     applyFilter();
-  }, [columns, filterDays]);
+  }, [columns, filterDays, filterLeadSource, filterStartDate, filterEndDate]);
 
   const fetchLeads = async () => {
     try {
@@ -93,21 +101,42 @@ const Contacts = () => {
   };
 
   const applyFilter = () => {
-    if (filterDays === null || filterDays === '') {
-      setFilteredColumns(columns);
-      return;
+    let filteredData = columns;
+
+    if (filterStartDate && filterEndDate) {
+      filteredData = filteredData.map((column) => {
+        const filteredLeads = column.leads.filter((lead) => {
+          const createdAt = dayjs(lead.created_at);
+          return (
+            createdAt.isAfter(dayjs(filterStartDate).subtract(1, 'day')) &&
+            createdAt.isBefore(dayjs(filterEndDate).add(1, 'day'))
+          );
+        });
+        return { ...column, leads: filteredLeads };
+      });
     }
 
-    const filteredData = columns.map((column) => {
-      const filteredLeads = column.leads.filter((lead) => {
-        if (lead.next_follow_up_date) {
-          const daysDifference = dayjs(lead.next_follow_up_date).diff(dayjs(), 'day');
-          return daysDifference >= 0 && daysDifference <= filterDays;
-        }
-        return false;
+    if (filterLeadSource) {
+      filteredData = filteredData.map((column) => {
+        const filteredLeads = column.leads.filter(
+          (lead) => lead.lead_source === filterLeadSource
+        );
+        return { ...column, leads: filteredLeads };
       });
-      return { ...column, leads: filteredLeads };
-    });
+    }
+
+    if (filterDays !== null && filterDays !== '') {
+      filteredData = filteredData.map((column) => {
+        const filteredLeads = column.leads.filter((lead) => {
+          if (lead.next_follow_up_date) {
+            const daysDifference = dayjs(lead.next_follow_up_date).diff(dayjs(), 'day');
+            return daysDifference >= 0 && daysDifference <= filterDays;
+          }
+          return false;
+        });
+        return { ...column, leads: filteredLeads };
+      });
+    }
 
     setFilteredColumns(filteredData);
   };
@@ -160,6 +189,11 @@ const Contacts = () => {
         console.error('Error updating lead status:', error);
       } else {
         setColumns(updatedColumns);
+
+        // If moved to 'Customer Won', convert to user
+        if (destination.droppableId === 'Customer Won') {
+          await convertLeadToUser(movedLead);
+        }
       }
     } catch (error) {
       console.error('Error updating lead status:', error);
@@ -279,6 +313,70 @@ const Contacts = () => {
     }
   };
 
+  const handleAddLeadSourceOpen = () => {
+    setAddLeadSourceOpen(true);
+  };
+
+  const handleAddLeadSourceClose = () => {
+    setAddLeadSourceOpen(false);
+    setNewLeadSourceName('');
+  };
+
+  const handleAddLeadSourceSubmit = async () => {
+    try {
+      const { error } = await supabase
+        .from('lead_sources')
+        .insert([{ name: newLeadSourceName }]);
+
+      if (error) {
+        console.error('Error adding new lead source:', error);
+      } else {
+        fetchLeadSources();
+        handleAddLeadSourceClose();
+      }
+    } catch (error) {
+      console.error('Error adding new lead source:', error);
+    }
+  };
+
+  const handleFilterLeadSourceChange = (e) => {
+    setFilterLeadSource(e.target.value);
+  };
+
+  const handleFilterStartDateChange = (e) => {
+    setFilterStartDate(e.target.value);
+  };
+
+  const handleFilterEndDateChange = (e) => {
+    setFilterEndDate(e.target.value);
+  };
+
+  const convertLeadToUser = async (lead) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .insert([
+          {
+            user_id: `USER_${lead.id}`,
+            name: lead.name,
+            mobile_number_1: lead.mobile_number,
+            email: '', // Assuming email is not collected at this point
+            active: true,
+            created_at: new Date(),
+          },
+        ])
+        .single();
+
+      if (error) {
+        console.error('Error converting lead to user:', error);
+      } else {
+        console.log('Lead converted to user:', data);
+      }
+    } catch (error) {
+      console.error('Error converting lead to user:', error);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
       {/* Header */}
@@ -300,13 +398,13 @@ const Contacts = () => {
                 </IconButton>
               </Tooltip>
               {/* Filter Button */}
-              <Tooltip title="Filter nearing follow-ups">
+              <Tooltip title="Filter contacts">
                 <IconButton
                   className="p-2"
                   onClick={handleFilterOpen}
                   style={{ backgroundColor: '#e3f2fd', color: '#1e88e5', borderRadius: '12px' }}
                 >
-                  <FilterListIcon style={{ fontSize: '1.75rem' }} />
+                  <FilterAltIcon style={{ fontSize: '1.75rem' }} />
                 </IconButton>
               </Tooltip>
             </div>
@@ -336,23 +434,30 @@ const Contacts = () => {
             fullWidth
             required
           />
-          <FormControl fullWidth margin="dense">
-            <InputLabel id="lead-source-label">Lead Source</InputLabel>
-            <Select
-              labelId="lead-source-label"
-              id="lead-source-select"
-              name="lead_source"
-              value={newContact.lead_source}
-              onChange={handleNewContactChange}
-              label="Lead Source"
-            >
-              {leadSources.map((source) => (
-                <MenuItem key={source.id} value={source.name}>
-                  {source.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <div className="flex items-center">
+            <FormControl fullWidth margin="dense">
+              <InputLabel id="lead-source-label">Lead Source</InputLabel>
+              <Select
+                labelId="lead-source-label"
+                id="lead-source-select"
+                name="lead_source"
+                value={newContact.lead_source}
+                onChange={handleNewContactChange}
+                label="Lead Source"
+              >
+                {leadSources.map((source) => (
+                  <MenuItem key={source.id} value={source.name}>
+                    {source.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Tooltip title="Add Lead Source">
+              <IconButton onClick={handleAddLeadSourceOpen}>
+                <AddIcon />
+              </IconButton>
+            </Tooltip>
+          </div>
           <TextField
             margin="dense"
             label="First Enquiry Date"
@@ -395,10 +500,69 @@ const Contacts = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Add Lead Source Dialog */}
+      <Dialog open={addLeadSourceOpen} onClose={handleAddLeadSourceClose} fullWidth maxWidth="sm">
+        <DialogTitle>Add New Lead Source</DialogTitle>
+        <DialogContent>
+          <TextField
+            margin="dense"
+            label="Lead Source Name"
+            value={newLeadSourceName}
+            onChange={(e) => setNewLeadSourceName(e.target.value)}
+            fullWidth
+            required
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleAddLeadSourceClose} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleAddLeadSourceSubmit} color="primary">
+            Add Lead Source
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Filter Dialog */}
       <Dialog open={filterOpen} onClose={handleFilterClose} fullWidth maxWidth="sm">
-        <DialogTitle>Filter Nearing Follow-ups</DialogTitle>
+        <DialogTitle>Filter Contacts</DialogTitle>
         <DialogContent>
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="filter-lead-source-label">Lead Source</InputLabel>
+            <Select
+              labelId="filter-lead-source-label"
+              value={filterLeadSource}
+              onChange={handleFilterLeadSourceChange}
+              label="Lead Source"
+            >
+              <MenuItem value="">
+                <em>All</em>
+              </MenuItem>
+              {leadSources.map((source) => (
+                <MenuItem key={source.id} value={source.name}>
+                  {source.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            margin="dense"
+            label="Start Date"
+            type="date"
+            value={filterStartDate}
+            onChange={handleFilterStartDateChange}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            margin="dense"
+            label="End Date"
+            type="date"
+            value={filterEndDate}
+            onChange={handleFilterEndDateChange}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
           <TextField
             margin="dense"
             label="Show contacts with follow-up in next N days"
@@ -410,7 +574,16 @@ const Contacts = () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setFilterDays(''); handleFilterClose(); }} color="primary">
+          <Button
+            onClick={() => {
+              setFilterLeadSource('');
+              setFilterStartDate(dayjs().subtract(2, 'month').format('YYYY-MM-DD'));
+              setFilterEndDate(dayjs().format('YYYY-MM-DD'));
+              setFilterDays(null);
+              handleFilterClose();
+            }}
+            color="primary"
+          >
             Clear Filter
           </Button>
           <Button onClick={handleFilterClose} color="primary">
@@ -422,7 +595,13 @@ const Contacts = () => {
       {/* Content */}
       <div className="flex flex-grow p-4 space-x-4 overflow-x-auto">
         <DragDropContext onDragEnd={onDragEnd}>
-          {(filterDays === '' || filterDays === null ? columns : filteredColumns).map((column) => (
+          {(filterDays !== null ||
+          filterLeadSource !== '' ||
+          filterStartDate ||
+          filterEndDate
+            ? filteredColumns
+            : columns
+          ).map((column) => (
             <Droppable key={column.name} droppableId={column.name}>
               {(provided) => (
                 <div
