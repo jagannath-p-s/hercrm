@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+
+ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Card,
@@ -239,91 +240,119 @@ const Staff = () => {
     }, {});
   };
 
-  // Edit Staff
-  const openEditDialog = (staff) => {
+// Edit Staff - Fetch details by user_id instead of useremail
+const openEditDialog = async (staff) => {
+  try {
+    const { data, error } = await supabase
+      .from("staffs")
+      .select("*")
+      .eq("user_id", staff.id) // Fetch by user_id instead of useremail
+      .single(); // Ensure it fetches a single record
+
+    if (error) throw error;
+
     setSelectedStaff({
-      id: staff.id,
-      username: staff.name,
-      useremail: staff.useremail || "",
-      password: "",
-      role: staff.role,
-      mobile_number: staff.mobile_number || "",
-      employee_code: staff.employee_code || "",
-      salary: staff.salary || "",
+      user_id: data.user_id,               // Fetch user ID
+      username: data.username,             // Fetch username
+      useremail: data.useremail,           // Fetch user email
+      password: "",                        // Keep password blank for security
+      role: data.role,                     // Fetch role
+      mobile_number: data.mobile_number,   // Fetch mobile number
+      employee_code: data.employee_code,   // Fetch employee code
+      salary: data.salary,                 // Fetch salary
     });
+
     setIsEditDialogOpen(true);
-  };
+  } catch (error) {
+    console.error("Error fetching staff details:", error);
+  }
+};
 
-  const handleEditStaff = async () => {
-    if (selectedStaff.username.trim()) {
-      try {
-        let updates = {
-          username: selectedStaff.username.trim(),
-          useremail: selectedStaff.useremail.trim(),
-          role: selectedStaff.role,
-          mobile_number: selectedStaff.mobile_number,
-          employee_code: selectedStaff.employee_code,
-          salary: selectedStaff.salary ? parseFloat(selectedStaff.salary) : null,
-        };
 
-        if (selectedStaff.password) {
-          const salt = bcrypt.genSaltSync(12);
-          const hashedPassword = bcrypt.hashSync(selectedStaff.password, salt);
-          updates.password = hashedPassword;
-        }
+const handleEditStaff = async () => {
+  if (selectedStaff.username.trim()) {
+    try {
+      let updates = {
+        username: selectedStaff.username.trim(),
+        useremail: selectedStaff.useremail.trim(),
+        role: selectedStaff.role,
+        mobile_number: selectedStaff.mobile_number,
+        employee_code: selectedStaff.employee_code,
+        salary: selectedStaff.salary ? parseFloat(selectedStaff.salary) : null,
+      };
 
-        const { error } = await supabase
-          .from("staffs")
-          .update(updates)
-          .eq("user_id", selectedStaff.id);
-
-        if (error) {
-          console.error("Error updating staff:", error);
-        } else {
-          setIsEditDialogOpen(false);
-          fetchAttendanceDataForMonth();
-        }
-      } catch (err) {
-        console.error("Error hashing password:", err.message);
-      }
-    }
-  };
-
-  // Add Staff
-  const handleAddStaff = async () => {
-    if (newStaff.username.trim()) {
-      try {
+      // Only hash password if it's provided (optional during edit)
+      if (selectedStaff.password) {
         const salt = bcrypt.genSaltSync(12);
-        const hashedPassword = bcrypt.hashSync(newStaff.password, salt);
-
-        const newUserId = `USR${Math.floor(Math.random() * 1000000)}`;
-        const { data, error } = await supabase.from("staffs").insert([
-          {
-            username: newStaff.username.trim(),
-            useremail: newStaff.useremail.trim(),
-            password: hashedPassword,
-            role: newStaff.role,
-            mobile_number: newStaff.mobile_number,
-            employee_code: newStaff.employee_code,
-            salary: newStaff.salary ? parseFloat(newStaff.salary) : null,
-            start_date: new Date().toISOString(),
-            end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
-            user_id: newUserId,
-            active: true,
-          },
-        ]);
-        if (error) {
-          console.error("Error adding new staff:", error);
-        } else {
-          setNewStaff({ username: "", useremail: "", password: "", role: "Staff", mobile_number: "", employee_code: "", salary: "" });
-          setIsDialogOpen(false);
-          fetchAttendanceDataForMonth();
-        }
-      } catch (err) {
-        console.error("Error hashing password:", err.message);
+        const hashedPassword = bcrypt.hashSync(selectedStaff.password, salt);
+        updates.password = hashedPassword;
       }
+
+      const { error } = await supabase
+        .from("staffs")
+        .update(updates)
+        .eq("user_id", selectedStaff.user_id);  // Use user_id, not id
+
+      if (error) {
+        console.error("Error updating staff:", error);
+      } else {
+        setIsEditDialogOpen(false);
+        fetchAttendanceDataForMonth();  // Refresh attendance data
+      }
+    } catch (err) {
+      console.error("Error hashing password:", err.message);
     }
-  };
+  }
+};
+
+
+const handleAddStaff = async () => {
+  if (newStaff.username.trim() && newStaff.useremail.trim() && newStaff.password.trim()) {
+    try {
+      const salt = bcrypt.genSaltSync(12);
+      const hashedPassword = bcrypt.hashSync(newStaff.password, salt);
+
+      const newUserId = `USR${Math.floor(Math.random() * 1000000)}`;
+      const { data, error } = await supabase.from("staffs").insert([
+        {
+          username: newStaff.username.trim(),
+          useremail: newStaff.useremail.trim(),
+          password: hashedPassword,
+          role: newStaff.role,
+          mobile_number: newStaff.mobile_number,
+          employee_code: newStaff.employee_code,
+          salary: newStaff.salary ? parseFloat(newStaff.salary) : null,
+          start_date: new Date().toISOString(),
+          end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
+          user_id: newUserId,
+          active: true,
+        },
+      ]);
+
+      if (error) {
+        console.error("Error adding new staff:", error);
+      } else {
+        // Reset the form
+        setNewStaff({
+          username: "",
+          useremail: "",
+          password: "",
+          role: "Staff",
+          mobile_number: "",
+          employee_code: "",
+          salary: "",
+        });
+        setIsDialogOpen(false);
+        fetchAttendanceDataForMonth();  // Refresh attendance data
+      }
+    } catch (err) {
+      console.error("Error hashing password:", err.message);
+    }
+  } else {
+    console.error("Please fill in all required fields.");
+  }
+};
+
 
   // Delete Staff
   const openDeleteDialog = (staff) => {
@@ -559,29 +588,65 @@ const Staff = () => {
 
       {/* Edit Staff Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Staff</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <Input placeholder="Staff Name" value={selectedStaff.username} onChange={(e) => setSelectedStaff({ ...selectedStaff, username: e.target.value })} />
-            <Input placeholder="Email" value={selectedStaff.useremail} onChange={(e) => setSelectedStaff({ ...selectedStaff, useremail: e.target.value })} />
-            <Input placeholder="Password" type="password" value={selectedStaff.password} onChange={(e) => setSelectedStaff({ ...selectedStaff, password: e.target.value })} />
-            <Input placeholder="Mobile Number" value={selectedStaff.mobile_number} onChange={(e) => setSelectedStaff({ ...selectedStaff, mobile_number: e.target.value })} />
-            <Input placeholder="Employee Code" value={selectedStaff.employee_code} onChange={(e) => setSelectedStaff({ ...selectedStaff, employee_code: e.target.value })} />
-            <Input placeholder="Salary" type="number" value={selectedStaff.salary} onChange={(e) => setSelectedStaff({ ...selectedStaff, salary: e.target.value })} />
-            <Select value={selectedStaff.role} onValueChange={(value) => setSelectedStaff({ ...selectedStaff, role: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select Role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Admin">Admin</SelectItem>
-                <SelectItem value="Staff">Staff</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={handleEditStaff} className="mt-4">Save Changes</Button>
-        </DialogContent>
+      <DialogContent>
+  <DialogHeader>
+    <DialogTitle>Edit Staff</DialogTitle>
+  </DialogHeader>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+    <Input 
+      placeholder="User ID" 
+      value={selectedStaff.user_id || ""} 
+      onChange={(e) => setSelectedStaff({ ...selectedStaff, user_id: e.target.value })} 
+    />
+    <Input 
+      placeholder="Staff Name" 
+      value={selectedStaff.username || ""} 
+      onChange={(e) => setSelectedStaff({ ...selectedStaff, username: e.target.value })} 
+    />
+    <Input 
+      placeholder="Email" 
+      value={selectedStaff.useremail || ""} 
+      onChange={(e) => setSelectedStaff({ ...selectedStaff, useremail: e.target.value })} 
+    />
+    <Input 
+      placeholder="Password" 
+      type="password" 
+      value={selectedStaff.password || ""} 
+      onChange={(e) => setSelectedStaff({ ...selectedStaff, password: e.target.value })} 
+    />
+    <Input 
+      placeholder="Mobile Number" 
+      value={selectedStaff.mobile_number || ""} 
+      onChange={(e) => setSelectedStaff({ ...selectedStaff, mobile_number: e.target.value })} 
+    />
+    <Input 
+      placeholder="Employee Code" 
+      value={selectedStaff.employee_code || ""} 
+      onChange={(e) => setSelectedStaff({ ...selectedStaff, employee_code: e.target.value })} 
+    />
+    <Input 
+      placeholder="Salary" 
+      type="number" 
+      value={selectedStaff.salary || ""} 
+      onChange={(e) => setSelectedStaff({ ...selectedStaff, salary: e.target.value })} 
+    />
+    <Select 
+      value={selectedStaff.role || "Staff"} 
+      onValueChange={(value) => setSelectedStaff({ ...selectedStaff, role: value })}>
+      <SelectTrigger>
+        <SelectValue placeholder="Select Role" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="Admin">Admin</SelectItem>
+        <SelectItem value="Staff">Staff</SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+  <Button onClick={handleEditStaff} className="mt-4">Save Changes</Button>
+</DialogContent>
+
+
+
       </Dialog>
 
       {/* Delete Staff Alert Dialog */}
