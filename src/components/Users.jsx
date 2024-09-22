@@ -1,5 +1,3 @@
-// Users.js
-
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -24,7 +22,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +40,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import Snackbar from '@mui/material/Snackbar';  // MUI Snackbar
+import MuiAlert from '@mui/material/Alert';
+
+const Alert = React.forwardRef(function Alert(props, ref) {
+  return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
+});
 
 const Users = () => {
   const [usersData, setUsersData] = useState([]);
@@ -50,7 +53,7 @@ const Users = () => {
     user_id: "",
     name: "",
     email: "",
-    date_of_birth: "",
+    date_of_birth: "", // Ensure valid date or set as null if it's optional
     mobile_number_1: "",
     mobile_number_2: "",
     emergency_contact_number: "",
@@ -71,6 +74,10 @@ const Users = () => {
   const [toggleUserId, setToggleUserId] = useState("");
   const [isBiometricPromptOpen, setIsBiometricPromptOpen] = useState(false);
   const [selectedUserForToggle, setSelectedUserForToggle] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [snackbarOpen, setSnackbarOpen] = useState(false); // Snackbar state
+  const [snackbarMessage, setSnackbarMessage] = useState(""); // Snackbar message
+  const [snackbarSeverity, setSnackbarSeverity] = useState("success"); // Snackbar severity (success or error)
 
   useEffect(() => {
     fetchUsersData();
@@ -108,12 +115,15 @@ const Users = () => {
 
     if (error) {
       console.error("Error updating active status:", error);
+      setSnackbarSeverity("error");
+      setSnackbarMessage("Error deactivating user.");
     } else {
-      // Add logic to delete user's biometric data from the biometric device here
-      console.log("Biometric data deleted for user:", user.user_id);
+      setSnackbarSeverity("success");
+      setSnackbarMessage("User deactivated and biometric data deleted.");
+      fetchUsersData();
     }
+    setSnackbarOpen(true);
     setIsBiometricPromptOpen(false);
-    fetchUsersData();
   };
 
   const handleReactivation = async () => {
@@ -125,11 +135,15 @@ const Users = () => {
 
     if (error) {
       console.error("Error updating user for reactivation:", error);
+      setSnackbarSeverity("error");
+      setSnackbarMessage("Error reactivating user.");
     } else {
-      console.log("User reactivated:", toggleUserId);
+      setSnackbarSeverity("success");
+      setSnackbarMessage("User reactivated successfully.");
+      fetchUsersData();
     }
+    setSnackbarOpen(true);
     setIsToggleDialogOpen(false);
-    fetchUsersData();
   };
 
   const closeToggleDialog = () => {
@@ -139,14 +153,50 @@ const Users = () => {
 
   const handleAddUser = async () => {
     if (newUser.name.trim() && newUser.email.trim()) {
-      const { error } = await supabase.from("users").insert([newUser]);
-      if (error) {
-        console.error("Error adding user:", error);
-      } else {
-        fetchUsersData();
-        setIsDialogOpen(false);
+      try {
+        const userToAdd = {
+          ...newUser,
+          date_of_birth: newUser.date_of_birth ? newUser.date_of_birth : null,  // Ensure date_of_birth is valid or set to null
+        };
+
+        const { error } = await supabase.from("users").insert([userToAdd]);
+        if (error) {
+          console.error("Error adding user:", error);
+          setSnackbarSeverity("error");
+          setSnackbarMessage(`Error adding user: ${error.message}`);
+        } else {
+          fetchUsersData();
+          setIsDialogOpen(false);
+          setNewUser({
+            user_id: "",
+            name: "",
+            email: "",
+            date_of_birth: "", // Reset the form
+            mobile_number_1: "",
+            mobile_number_2: "",
+            emergency_contact_number: "",
+            blood_group: "",
+            medical_conditions: "",
+            allergies: "",
+            injuries: "",
+            current_medications: "",
+            fitness_goals: "",
+            role: "Member",
+            active: false,
+          });
+          setSnackbarSeverity("success");
+          setSnackbarMessage("User added successfully.");
+        }
+      } catch (err) {
+        console.error("Error adding user:", err);
+        setSnackbarSeverity("error");
+        setSnackbarMessage(`Error adding user: ${err.message}`);
       }
+    } else {
+      setSnackbarSeverity("error");
+      setSnackbarMessage("Please provide valid name and email.");
     }
+    setSnackbarOpen(true);
   };
 
   const handleEditUser = async () => {
@@ -157,10 +207,15 @@ const Users = () => {
         .eq("id", selectedUser.id);
       if (error) {
         console.error("Error updating user:", error);
+        setSnackbarSeverity("error");
+        setSnackbarMessage(`Error updating user: ${error.message}`);
       } else {
         fetchUsersData();
         setIsEditDialogOpen(false);
+        setSnackbarSeverity("success");
+        setSnackbarMessage("User updated successfully.");
       }
+      setSnackbarOpen(true);
     }
   };
 
@@ -171,10 +226,38 @@ const Users = () => {
       .eq("id", selectedUser.id);
     if (error) {
       console.error("Error deleting user:", error);
+      setSnackbarSeverity("error");
+      setSnackbarMessage(`Error deleting user: ${error.message}`);
     } else {
       fetchUsersData();
       setIsAlertDialogOpen(false);
+      setSnackbarSeverity("success");
+      setSnackbarMessage("User deleted successfully.");
     }
+    setSnackbarOpen(true);
+  };
+
+  // Search filter logic for all fields
+  const filteredUsers = usersData.filter((user) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      user.name.toLowerCase().includes(query) ||
+      user.email.toLowerCase().includes(query) ||
+      user.mobile_number_1.toLowerCase().includes(query) ||
+      user.mobile_number_2?.toLowerCase().includes(query) ||
+      user.emergency_contact_number.toLowerCase().includes(query) ||
+      user.blood_group?.toLowerCase().includes(query) ||
+      user.medical_conditions?.toLowerCase().includes(query) ||
+      user.allergies?.toLowerCase().includes(query) ||
+      user.injuries?.toLowerCase().includes(query) ||
+      user.current_medications?.toLowerCase().includes(query) ||
+      user.fitness_goals?.toLowerCase().includes(query)
+    );
+  });
+
+  // Handle snackbar close
+  const handleSnackbarClose = () => {
+    setSnackbarOpen(false);
   };
 
   return (
@@ -184,26 +267,37 @@ const Users = () => {
           <CardTitle>Users Management</CardTitle>
         </CardHeader>
         <CardContent>
+          <Input
+            className="mb-4"
+            placeholder="Search by any field..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <Button onClick={() => setIsDialogOpen(true)} className="mb-4">Add User</Button>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Mobile</TableHead>
+                <TableHead>Mobile 1</TableHead>
+                <TableHead>Mobile 2</TableHead>
                 <TableHead>Emergency Contact</TableHead>
                 <TableHead>Blood Group</TableHead>
+                <TableHead>Medical Conditions</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {usersData.map((user) => (
+              {filteredUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>{user.name}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>{user.mobile_number_1}</TableCell>
+                  <TableCell>{user.mobile_number_2 || "N/A"}</TableCell>
                   <TableCell>{user.emergency_contact_number}</TableCell>
-                  <TableCell>{user.blood_group}</TableCell>
+                  <TableCell>{user.blood_group || "N/A"}</TableCell>
+                  <TableCell>{user.medical_conditions || "N/A"}</TableCell>
                   <TableCell>
                     <Badge variant={user.active ? "default" : "destructive"}>
                       {user.active ? "Active" : "Inactive"}
@@ -242,7 +336,7 @@ const Users = () => {
       </Card>
 
       {/* Add/Edit User Dialog */}
-      <Dialog open={isDialogOpen || isEditDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen || isEditDialogOpen} onOpenChange={() => { setIsDialogOpen(false); setIsEditDialogOpen(false); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{isEditDialogOpen ? "Edit User" : "Add New User"}</DialogTitle>
@@ -266,7 +360,6 @@ const Users = () => {
                   : setNewUser({ ...newUser, email: e.target.value })
               }
             />
-            {/* Other Fields */}
             <Input
               placeholder="Mobile Number 1"
               value={isEditDialogOpen ? selectedUser.mobile_number_1 : newUser.mobile_number_1}
@@ -303,7 +396,6 @@ const Users = () => {
                   : setNewUser({ ...newUser, blood_group: e.target.value })
               }
             />
-            {/* Medical Information */}
             <Input
               placeholder="Medical Conditions"
               value={isEditDialogOpen ? selectedUser.medical_conditions : newUser.medical_conditions}
@@ -402,6 +494,18 @@ const Users = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* MUI Snackbar for feedback */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </div>
   );
 };
