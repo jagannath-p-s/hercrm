@@ -1,5 +1,3 @@
-// Finance.js
-
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -35,16 +33,21 @@ import { supabase } from "../supabaseClient";
 import CurrencyRupeeIcon from "@mui/icons-material/CurrencyRupee";
 import AddIcon from "@mui/icons-material/Add";
 import { Snackbar, SnackbarContent } from "@mui/material";
+import Pagination from "@mui/material/Pagination";
+import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
+
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
 const Finance = () => {
   const [financeStats, setFinanceStats] = useState({
     totalIncome: 0,
     totalExpenses: 0,
-    netBalance: 0,
+    totalEarnings: 0,
   });
 
   const [expenses, setExpenses] = useState([]);
   const [expenseTypes, setExpenseTypes] = useState([]);
+  const [incomes, setIncomes] = useState([]);
 
   const [newExpense, setNewExpense] = useState({
     description: "",
@@ -56,61 +59,110 @@ const Finance = () => {
     staff_id: null,
   });
 
+  const [newIncome, setNewIncome] = useState({
+    amount: "",
+    description: "",
+    income_date: "",
+  });
+
   const [newExpenseType, setNewExpenseType] = useState({
     name: "",
     description: "",
   });
 
   const [isExpenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [isIncomeDialogOpen, setIncomeDialogOpen] = useState(false);
   const [isExpenseTypeDialogOpen, setExpenseTypeDialogOpen] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [expensesPerPage] = useState(5);
+  const [dateFilter, setDateFilter] = useState({
+    startDate: "",
+    endDate: "",
+  });
+
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     fetchFinanceData();
-  }, []);
+  }, [currentPage, dateFilter]);
 
   // Fetch finance data
   const fetchFinanceData = async () => {
     try {
-      const { data: totalIncomeData } = await supabase
-        .from("incomes")
-        .select("amount");
-      const totalIncome =
-        totalIncomeData?.reduce((acc, curr) => acc + curr.amount, 0) || 0;
-
-      const { data: totalExpensesData } = await supabase
+      // Build date filters for expenses and incomes
+      let expenseQuery = supabase
         .from("expenses")
-        .select("amount");
-      const totalExpenses =
-        totalExpensesData?.reduce((acc, curr) => acc + curr.amount, 0) || 0;
+        .select("*", { count: "exact" })
+        .order("final_date_to_pay", { ascending: false });
 
-      const netBalance = totalIncome - totalExpenses;
+      let incomeQuery = supabase
+        .from("incomes")
+        .select("*")
+        .order("income_date", { ascending: false });
+
+      if (dateFilter.startDate) {
+        expenseQuery = expenseQuery.gte(
+          "final_date_to_pay",
+          dateFilter.startDate
+        );
+        incomeQuery = incomeQuery.gte("income_date", dateFilter.startDate);
+      }
+      if (dateFilter.endDate) {
+        expenseQuery = expenseQuery.lte(
+          "final_date_to_pay",
+          dateFilter.endDate
+        );
+        incomeQuery = incomeQuery.lte("income_date", dateFilter.endDate);
+      }
+
+      // Fetch Expenses with Pagination
+      const { data: expensesData, count } = await expenseQuery.range(
+        (currentPage - 1) * expensesPerPage,
+        currentPage * expensesPerPage - 1
+      );
+
+      setExpenses(expensesData || []);
+
+      // Set total pages for pagination
+      const totalExpensesCount = count || expensesData.length;
+      setTotalPages(Math.ceil(totalExpensesCount / expensesPerPage));
+
+      // Fetch Incomes
+      const { data: incomesData } = await incomeQuery;
+      setIncomes(incomesData || []);
+
+      // Calculate Totals
+      const totalIncome =
+        incomesData?.reduce(
+          (acc, curr) => acc + parseFloat(curr.amount || 0),
+          0
+        ) || 0;
+      const totalExpenses =
+        expensesData?.reduce(
+          (acc, curr) => acc + parseFloat(curr.amount || 0),
+          0
+        ) || 0;
+      const totalEarnings = totalIncome - totalExpenses;
 
       setFinanceStats({
         totalIncome,
         totalExpenses,
-        netBalance,
+        totalEarnings,
       });
 
-      const { data: expensesData } = await supabase.from("expenses").select("*");
-      setExpenses(expensesData);
-
+      // Fetch Expense Types
       const { data: expenseTypesData } = await supabase
         .from("expense_type")
         .select("*");
-      setExpenseTypes(expenseTypesData);
+      setExpenseTypes(expenseTypesData || []);
     } catch (error) {
       console.error("Error fetching finance data:", error);
     }
   };
 
-  // Expense Dialog handlers
-  const handleExpenseDialogClose = () => {
-    setExpenseDialogOpen(false);
-    resetNewExpense();
-  };
-
+  // Handle Expense Submit
   const handleExpenseSubmit = async () => {
     try {
       await supabase.from("expenses").insert([
@@ -126,7 +178,8 @@ const Finance = () => {
           staff_id: newExpense.staff_id,
         },
       ]);
-      handleExpenseDialogClose();
+      setExpenseDialogOpen(false);
+      resetNewExpense();
       fetchFinanceData();
       showSnackbar("Expense added successfully!");
     } catch (error) {
@@ -135,12 +188,27 @@ const Finance = () => {
     }
   };
 
-  // Expense Type Dialog handlers
-  const handleExpenseTypeDialogClose = () => {
-    setExpenseTypeDialogOpen(false);
-    resetNewExpenseType();
+  // Handle Income Submit
+  const handleIncomeSubmit = async () => {
+    try {
+      await supabase.from("incomes").insert([
+        {
+          description: newIncome.description || null,
+          amount: parseFloat(newIncome.amount),
+          income_date: newIncome.income_date || null,
+        },
+      ]);
+      setIncomeDialogOpen(false);
+      resetNewIncome();
+      fetchFinanceData();
+      showSnackbar("Income added successfully!");
+    } catch (error) {
+      console.error("Error adding income:", error);
+      showSnackbar("Error adding income.");
+    }
   };
 
+  // Handle Expense Type Submit
   const handleExpenseTypeSubmit = async () => {
     try {
       await supabase.from("expense_type").insert([
@@ -149,7 +217,8 @@ const Finance = () => {
           description: newExpenseType.description || null,
         },
       ]);
-      handleExpenseTypeDialogClose();
+      setExpenseTypeDialogOpen(false);
+      resetNewExpenseType();
       fetchFinanceData();
       showSnackbar("Expense type added successfully!");
     } catch (error) {
@@ -158,7 +227,7 @@ const Finance = () => {
     }
   };
 
-  // Reset new expense and expense type data
+  // Reset new expense, income, and expense type data
   const resetNewExpense = () => {
     setNewExpense({
       description: "",
@@ -171,6 +240,14 @@ const Finance = () => {
     });
   };
 
+  const resetNewIncome = () => {
+    setNewIncome({
+      amount: "",
+      description: "",
+      income_date: "",
+    });
+  };
+
   const resetNewExpenseType = () => {
     setNewExpenseType({
       name: "",
@@ -178,7 +255,12 @@ const Finance = () => {
     });
   };
 
-  // Snackbar handlers
+  // Pagination Handlers
+  const handlePageChange = (event, value) => {
+    setCurrentPage(value);
+  };
+
+  // Snackbar Handlers
   const showSnackbar = (message) => {
     setSnackbarMessage(message);
     setSnackbarOpen(true);
@@ -188,6 +270,45 @@ const Finance = () => {
     setSnackbarOpen(false);
     setSnackbarMessage("");
   };
+
+  // Handle Expense Status Toggle
+  const toggleExpenseStatus = async (expenseId, currentStatus) => {
+    try {
+      const newStatus = currentStatus === "paid" ? "unpaid" : "paid";
+      await supabase
+        .from("expenses")
+        .update({ status: newStatus })
+        .eq("id", expenseId);
+      fetchFinanceData();
+      showSnackbar(`Expense marked as ${newStatus}.`);
+    } catch (error) {
+      console.error("Error updating expense status:", error);
+      showSnackbar("Error updating expense status.");
+    }
+  };
+
+  // Prepare data for charts
+  const incomeChartData = incomes.reduce((acc, income) => {
+    const key = income.description || "Other";
+    acc[key] = (acc[key] || 0) + parseFloat(income.amount || 0);
+    return acc;
+  }, {});
+
+  const expenseChartData = expenses.reduce((acc, expense) => {
+    const key =
+      expenseTypes.find((type) => type.id === expense.category_id)?.name ||
+      expense.expense_type ||
+      "Other";
+    acc[key] = (acc[key] || 0) + parseFloat(expense.amount || 0);
+    return acc;
+  }, {});
+
+  const incomeDataForChart = Object.entries(incomeChartData).map(
+    ([name, value]) => ({ name, value })
+  );
+  const expenseDataForChart = Object.entries(expenseChartData).map(
+    ([name, value]) => ({ name, value })
+  );
 
   return (
     <div className="p-4">
@@ -219,19 +340,47 @@ const Finance = () => {
               </p>
             </div>
 
-            {/* Net Balance */}
+            {/* Total Earnings */}
             <div className="border p-4 rounded">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-medium">Net Balance</h2>
+                <h2 className="text-sm font-medium">Total Earnings</h2>
                 <CurrencyRupeeIcon className="text-blue-600" />
               </div>
               <p className="text-2xl font-bold">
-                ₹{financeStats.netBalance.toFixed(2)}
+                ₹{financeStats.totalEarnings.toFixed(2)}
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Date Filter */}
+      <div className="flex space-x-4 my-4">
+        <Input
+          type="date"
+          placeholder="Start Date"
+          value={dateFilter.startDate}
+          onChange={(e) =>
+            setDateFilter({ ...dateFilter, startDate: e.target.value })
+          }
+        />
+        <Input
+          type="date"
+          placeholder="End Date"
+          value={dateFilter.endDate}
+          onChange={(e) =>
+            setDateFilter({ ...dateFilter, endDate: e.target.value })
+          }
+        />
+        <Button
+          onClick={() => {
+            setCurrentPage(1);
+            fetchFinanceData();
+          }}
+        >
+          Filter
+        </Button>
+      </div>
 
       {/* Expense Table */}
       <Card className="mt-4 border">
@@ -257,28 +406,45 @@ const Finance = () => {
                   <TableCell>
                     {expenseTypes.find(
                       (type) => type.id === expense.category_id
-                    )?.name || expense.expense_type || "N/A"}
+                    )?.name ||
+                      expense.expense_type ||
+                      "N/A"}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        expense.status === "paid" ? "default" : "destructive"
+                    <Button
+                      variant="link"
+                      onClick={() =>
+                        toggleExpenseStatus(expense.id, expense.status)
                       }
                     >
-                      {expense.status}
-                    </Badge>
+                      <Badge
+                        variant={
+                          expense.status === "paid" ? "default" : "destructive"
+                        }
+                      >
+                        {expense.status}
+                      </Badge>
+                    </Button>
                   </TableCell>
                   <TableCell>
-                    {new Date(expense.expense_date).toLocaleDateString()}
+                    {expense.final_date_to_pay
+                      ? new Date(expense.final_date_to_pay).toLocaleDateString()
+                      : "N/A"}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          <Pagination
+            count={totalPages}
+            page={currentPage}
+            onChange={handlePageChange}
+            className="mt-4"
+          />
         </CardContent>
       </Card>
 
-      {/* Add Expense and Add Expense Type Buttons */}
+      {/* Add Expense and Add Income Buttons */}
       <div className="flex items-center mt-4">
         <Button
           variant="default"
@@ -289,14 +455,60 @@ const Finance = () => {
           Add Expense
         </Button>
 
+        <Button variant="default" onClick={() => setIncomeDialogOpen(true)}>
+          <AddIcon className="mr-2 h-4 w-4" />
+          Add Income
+        </Button>
+
         <Button
           variant="default"
+          className="ml-4"
           onClick={() => setExpenseTypeDialogOpen(true)}
         >
           <AddIcon className="mr-2 h-4 w-4" />
           Add Expense Type
         </Button>
       </div>
+
+      {/* Income Dialog */}
+      <Dialog open={isIncomeDialogOpen} onOpenChange={setIncomeDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Add New Income</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-4 mt-4">
+            <Input
+              placeholder="Description"
+              value={newIncome.description}
+              onChange={(e) =>
+                setNewIncome({ ...newIncome, description: e.target.value })
+              }
+            />
+            <Input
+              placeholder="Amount"
+              type="number"
+              value={newIncome.amount}
+              onChange={(e) =>
+                setNewIncome({ ...newIncome, amount: e.target.value })
+              }
+            />
+            <Input
+              type="date"
+              placeholder="Income Date"
+              value={newIncome.income_date}
+              onChange={(e) =>
+                setNewIncome({
+                  ...newIncome,
+                  income_date: e.target.value,
+                })
+              }
+            />
+          </div>
+          <Button onClick={handleIncomeSubmit} className="mt-4">
+            Add Income
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {/* Expense Dialog */}
       <Dialog open={isExpenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
@@ -398,6 +610,71 @@ const Finance = () => {
           </Button>
         </DialogContent>
       </Dialog>
+
+      {/* Charts Section */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2 my-4">
+        <Card className="border">
+          <CardHeader>
+            <CardTitle>Income Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PieChart width={400} height={400}>
+              <Pie
+                data={incomeDataForChart}
+                cx={200}
+                cy={200}
+                labelLine={false}
+                outerRadius={150}
+                fill="#8884d8"
+                dataKey="value"
+                label={({ name, percent }) =>
+                  `${name}: ${(percent * 100).toFixed(0)}%`
+                }
+              >
+                {incomeDataForChart.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={COLORS[index % COLORS.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </CardContent>
+        </Card>
+
+        <Card className="border">
+          <CardHeader>
+            <CardTitle>Expense Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PieChart width={400} height={400}>
+              <Pie
+                data={expenseDataForChart}
+                cx={200}
+                cy={200}
+                labelLine={false}
+                outerRadius={150}
+                fill="#8884d8"
+                dataKey="value"
+                label={({ name, percent }) =>
+                  `${name}: ${(percent * 100).toFixed(0)}%`
+                }
+              >
+                {expenseDataForChart.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={COLORS[index % COLORS.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Snackbar for Notifications */}
       <Snackbar
