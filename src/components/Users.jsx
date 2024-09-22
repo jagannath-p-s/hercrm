@@ -40,8 +40,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import Snackbar from '@mui/material/Snackbar';  // MUI Snackbar
+import Snackbar from '@mui/material/Snackbar';  
 import MuiAlert from '@mui/material/Alert';
+import dayjs from "dayjs";  // For date calculations
 
 const Alert = React.forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
@@ -53,7 +54,7 @@ const Users = () => {
     user_id: "",
     name: "",
     email: "",
-    date_of_birth: "", // Ensure valid date or set as null if it's optional
+    date_of_birth: "", 
     mobile_number_1: "",
     mobile_number_2: "",
     emergency_contact_number: "",
@@ -75,9 +76,9 @@ const Users = () => {
   const [isBiometricPromptOpen, setIsBiometricPromptOpen] = useState(false);
   const [selectedUserForToggle, setSelectedUserForToggle] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [snackbarOpen, setSnackbarOpen] = useState(false); // Snackbar state
-  const [snackbarMessage, setSnackbarMessage] = useState(""); // Snackbar message
-  const [snackbarSeverity, setSnackbarSeverity] = useState("success"); // Snackbar severity (success or error)
+  const [snackbarOpen, setSnackbarOpen] = useState(false); 
+  const [snackbarMessage, setSnackbarMessage] = useState(""); 
+  const [snackbarSeverity, setSnackbarSeverity] = useState("success"); 
 
   useEffect(() => {
     fetchUsersData();
@@ -93,14 +94,21 @@ const Users = () => {
     }
   };
 
+  const calculateAge = (dob) => {
+    return dayjs().diff(dayjs(dob), 'year');
+  };
+
+  const isBirthdayToday = (dob) => {
+    const today = dayjs();
+    return today.isSame(dayjs(dob), 'day') && today.isSame(dayjs(dob), 'month');
+  };
+
   // Toggle Active Status for User
   const handleToggleActive = (user) => {
     if (user.active) {
-      // Prompt for biometric data deletion if setting to inactive
       setSelectedUserForToggle(user);
       setIsBiometricPromptOpen(true);
     } else {
-      // Open dialog to ask for user ID when reactivating
       setSelectedUserForToggle(user);
       setIsToggleDialogOpen(true);
     }
@@ -114,7 +122,6 @@ const Users = () => {
       .eq("id", user.id);
 
     if (error) {
-      console.error("Error updating active status:", error);
       setSnackbarSeverity("error");
       setSnackbarMessage("Error deactivating user.");
     } else {
@@ -134,7 +141,6 @@ const Users = () => {
       .eq("id", user.id);
 
     if (error) {
-      console.error("Error updating user for reactivation:", error);
       setSnackbarSeverity("error");
       setSnackbarMessage("Error reactivating user.");
     } else {
@@ -146,49 +152,25 @@ const Users = () => {
     setIsToggleDialogOpen(false);
   };
 
-  const closeToggleDialog = () => {
-    setIsToggleDialogOpen(false);
-    setToggleUserId("");
-  };
-
   const handleAddUser = async () => {
     if (newUser.name.trim() && newUser.email.trim()) {
       try {
         const userToAdd = {
           ...newUser,
-          date_of_birth: newUser.date_of_birth ? newUser.date_of_birth : null,  // Ensure date_of_birth is valid or set to null
+          date_of_birth: newUser.date_of_birth ? newUser.date_of_birth : null,  
         };
 
         const { error } = await supabase.from("users").insert([userToAdd]);
         if (error) {
-          console.error("Error adding user:", error);
           setSnackbarSeverity("error");
           setSnackbarMessage(`Error adding user: ${error.message}`);
         } else {
           fetchUsersData();
           setIsDialogOpen(false);
-          setNewUser({
-            user_id: "",
-            name: "",
-            email: "",
-            date_of_birth: "", // Reset the form
-            mobile_number_1: "",
-            mobile_number_2: "",
-            emergency_contact_number: "",
-            blood_group: "",
-            medical_conditions: "",
-            allergies: "",
-            injuries: "",
-            current_medications: "",
-            fitness_goals: "",
-            role: "Member",
-            active: false,
-          });
           setSnackbarSeverity("success");
           setSnackbarMessage("User added successfully.");
         }
       } catch (err) {
-        console.error("Error adding user:", err);
         setSnackbarSeverity("error");
         setSnackbarMessage(`Error adding user: ${err.message}`);
       }
@@ -206,7 +188,6 @@ const Users = () => {
         .update(selectedUser)
         .eq("id", selectedUser.id);
       if (error) {
-        console.error("Error updating user:", error);
         setSnackbarSeverity("error");
         setSnackbarMessage(`Error updating user: ${error.message}`);
       } else {
@@ -225,7 +206,6 @@ const Users = () => {
       .delete()
       .eq("id", selectedUser.id);
     if (error) {
-      console.error("Error deleting user:", error);
       setSnackbarSeverity("error");
       setSnackbarMessage(`Error deleting user: ${error.message}`);
     } else {
@@ -237,7 +217,6 @@ const Users = () => {
     setSnackbarOpen(true);
   };
 
-  // Search filter logic for all fields
   const filteredUsers = usersData.filter((user) => {
     const query = searchQuery.toLowerCase();
     return (
@@ -255,7 +234,6 @@ const Users = () => {
     );
   });
 
-  // Handle snackbar close
   const handleSnackbarClose = () => {
     setSnackbarOpen(false);
   };
@@ -283,7 +261,8 @@ const Users = () => {
                 <TableHead>Mobile 2</TableHead>
                 <TableHead>Emergency Contact</TableHead>
                 <TableHead>Blood Group</TableHead>
-                <TableHead>Medical Conditions</TableHead>
+                <TableHead>Date of Birth</TableHead>
+                <TableHead>Age</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -297,7 +276,11 @@ const Users = () => {
                   <TableCell>{user.mobile_number_2 || "N/A"}</TableCell>
                   <TableCell>{user.emergency_contact_number}</TableCell>
                   <TableCell>{user.blood_group || "N/A"}</TableCell>
-                  <TableCell>{user.medical_conditions || "N/A"}</TableCell>
+                  <TableCell>{user.date_of_birth ? dayjs(user.date_of_birth).format('DD/MM/YYYY') : "N/A"}</TableCell>
+                  <TableCell>
+                    {user.date_of_birth ? calculateAge(user.date_of_birth) : "N/A"}
+                    {isBirthdayToday(user.date_of_birth) && <Badge variant="default">🎂 Birthday Today!</Badge>}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={user.active ? "default" : "destructive"}>
                       {user.active ? "Active" : "Inactive"}
@@ -337,110 +320,157 @@ const Users = () => {
 
       {/* Add/Edit User Dialog */}
       <Dialog open={isDialogOpen || isEditDialogOpen} onOpenChange={() => { setIsDialogOpen(false); setIsEditDialogOpen(false); }}>
-        <DialogContent>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditDialogOpen ? "Edit User" : "Add New User"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <Input
-              placeholder="Name"
-              value={isEditDialogOpen ? selectedUser.name : newUser.name}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, name: e.target.value })
-                  : setNewUser({ ...newUser, name: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Email"
-              value={isEditDialogOpen ? selectedUser.email : newUser.email}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, email: e.target.value })
-                  : setNewUser({ ...newUser, email: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Mobile Number 1"
-              value={isEditDialogOpen ? selectedUser.mobile_number_1 : newUser.mobile_number_1}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, mobile_number_1: e.target.value })
-                  : setNewUser({ ...newUser, mobile_number_1: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Mobile Number 2"
-              value={isEditDialogOpen ? selectedUser.mobile_number_2 : newUser.mobile_number_2}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, mobile_number_2: e.target.value })
-                  : setNewUser({ ...newUser, mobile_number_2: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Emergency Contact"
-              value={isEditDialogOpen ? selectedUser.emergency_contact_number : newUser.emergency_contact_number}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, emergency_contact_number: e.target.value })
-                  : setNewUser({ ...newUser, emergency_contact_number: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Blood Group"
-              value={isEditDialogOpen ? selectedUser.blood_group : newUser.blood_group}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, blood_group: e.target.value })
-                  : setNewUser({ ...newUser, blood_group: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Medical Conditions"
-              value={isEditDialogOpen ? selectedUser.medical_conditions : newUser.medical_conditions}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, medical_conditions: e.target.value })
-                  : setNewUser({ ...newUser, medical_conditions: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Allergies"
-              value={isEditDialogOpen ? selectedUser.allergies : newUser.allergies}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, allergies: e.target.value })
-                  : setNewUser({ ...newUser, allergies: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Injuries"
-              value={isEditDialogOpen ? selectedUser.injuries : newUser.injuries}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, injuries: e.target.value })
-                  : setNewUser({ ...newUser, injuries: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Current Medications"
-              value={isEditDialogOpen ? selectedUser.current_medications : newUser.current_medications}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, current_medications: e.target.value })
-                  : setNewUser({ ...newUser, current_medications: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Fitness Goals"
-              value={isEditDialogOpen ? selectedUser.fitness_goals : newUser.fitness_goals}
-              onChange={(e) =>
-                isEditDialogOpen
-                  ? setSelectedUser({ ...selectedUser, fitness_goals: e.target.value })
-                  : setNewUser({ ...newUser, fitness_goals: e.target.value })
-              }
-            />
+            {/* Labeled input fields */}
+            <div>
+              <label className="block mb-2 text-sm">Name</label>
+              <Input
+                placeholder="Name"
+                value={isEditDialogOpen ? selectedUser.name : newUser.name}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, name: e.target.value })
+                    : setNewUser({ ...newUser, name: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Email</label>
+              <Input
+                placeholder="Email"
+                value={isEditDialogOpen ? selectedUser.email : newUser.email}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, email: e.target.value })
+                    : setNewUser({ ...newUser, email: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Mobile Number 1</label>
+              <Input
+                placeholder="Mobile Number 1"
+                value={isEditDialogOpen ? selectedUser.mobile_number_1 : newUser.mobile_number_1}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, mobile_number_1: e.target.value })
+                    : setNewUser({ ...newUser, mobile_number_1: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Mobile Number 2</label>
+              <Input
+                placeholder="Mobile Number 2"
+                value={isEditDialogOpen ? selectedUser.mobile_number_2 : newUser.mobile_number_2}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, mobile_number_2: e.target.value })
+                    : setNewUser({ ...newUser, mobile_number_2: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Emergency Contact</label>
+              <Input
+                placeholder="Emergency Contact"
+                value={isEditDialogOpen ? selectedUser.emergency_contact_number : newUser.emergency_contact_number}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, emergency_contact_number: e.target.value })
+                    : setNewUser({ ...newUser, emergency_contact_number: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Blood Group</label>
+              <Input
+                placeholder="Blood Group"
+                value={isEditDialogOpen ? selectedUser.blood_group : newUser.blood_group}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, blood_group: e.target.value })
+                    : setNewUser({ ...newUser, blood_group: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Date of Birth</label>
+              <Input
+                type="date"
+                placeholder="Date of Birth"
+                value={isEditDialogOpen ? selectedUser.date_of_birth : newUser.date_of_birth}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, date_of_birth: e.target.value })
+                    : setNewUser({ ...newUser, date_of_birth: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Medical Conditions</label>
+              <Input
+                placeholder="Medical Conditions"
+                value={isEditDialogOpen ? selectedUser.medical_conditions : newUser.medical_conditions}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, medical_conditions: e.target.value })
+                    : setNewUser({ ...newUser, medical_conditions: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Allergies</label>
+              <Input
+                placeholder="Allergies"
+                value={isEditDialogOpen ? selectedUser.allergies : newUser.allergies}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, allergies: e.target.value })
+                    : setNewUser({ ...newUser, allergies: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Injuries</label>
+              <Input
+                placeholder="Injuries"
+                value={isEditDialogOpen ? selectedUser.injuries : newUser.injuries}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, injuries: e.target.value })
+                    : setNewUser({ ...newUser, injuries: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Current Medications</label>
+              <Input
+                placeholder="Current Medications"
+                value={isEditDialogOpen ? selectedUser.current_medications : newUser.current_medications}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, current_medications: e.target.value })
+                    : setNewUser({ ...newUser, current_medications: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-sm">Fitness Goals</label>
+              <Input
+                placeholder="Fitness Goals"
+                value={isEditDialogOpen ? selectedUser.fitness_goals : newUser.fitness_goals}
+                onChange={(e) =>
+                  isEditDialogOpen
+                    ? setSelectedUser({ ...selectedUser, fitness_goals: e.target.value })
+                    : setNewUser({ ...newUser, fitness_goals: e.target.value })
+                }
+              />
+            </div>
           </div>
           <Button onClick={isEditDialogOpen ? handleEditUser : handleAddUser} className="mt-4">
             {isEditDialogOpen ? "Save Changes" : "Add User"}
