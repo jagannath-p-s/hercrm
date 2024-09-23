@@ -11,7 +11,7 @@ const ReceiptComponent = React.forwardRef(({ membership }, ref) => {
         borderRadius: '10px',
         backgroundColor: '#f9f9f9',
         maxWidth: 500,
-        margin: '50',
+        margin: '0 auto',
       }}
     >
       {/* Header */}
