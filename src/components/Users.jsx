@@ -153,13 +153,14 @@ const Users = () => {
   };
 
   const handleAddUser = async () => {
-    if (newUser.name.trim() && newUser.email.trim()) {
+    if (newUser.name.trim() && newUser.email.trim() && newUser.user_id.trim()) {
       try {
         const userToAdd = {
           ...newUser,
-          date_of_birth: newUser.date_of_birth ? newUser.date_of_birth : null,  
+          user_id: newUser.user_id,  // Ensure user_id is included in the new user data
+          date_of_birth: newUser.date_of_birth ? newUser.date_of_birth : null,
         };
-
+  
         const { error } = await supabase.from("users").insert([userToAdd]);
         if (error) {
           setSnackbarSeverity("error");
@@ -176,17 +177,23 @@ const Users = () => {
       }
     } else {
       setSnackbarSeverity("error");
-      setSnackbarMessage("Please provide valid name and email.");
+      setSnackbarMessage("Please provide valid user ID, name, and email.");
     }
     setSnackbarOpen(true);
   };
-
+  
   const handleEditUser = async () => {
-    if (selectedUser.name.trim() && selectedUser.email.trim()) {
+    if (selectedUser.name.trim() && selectedUser.email.trim() && selectedUser.user_id.trim()) {
+      const userToUpdate = {
+        ...selectedUser,
+        user_id: selectedUser.user_id,  // Ensure user_id is included in the update data
+      };
+  
       const { error } = await supabase
         .from("users")
-        .update(selectedUser)
+        .update(userToUpdate)
         .eq("id", selectedUser.id);
+      
       if (error) {
         setSnackbarSeverity("error");
         setSnackbarMessage(`Error updating user: ${error.message}`);
@@ -199,6 +206,7 @@ const Users = () => {
       setSnackbarOpen(true);
     }
   };
+  
 
   const handleDeleteUser = async () => {
     const { error } = await supabase
@@ -326,6 +334,19 @@ const Users = () => {
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             {/* Labeled input fields */}
+            <div>
+  <label className="block mb-2 text-sm">User ID</label>
+  <Input
+    placeholder="User ID"
+    value={isEditDialogOpen ? selectedUser.user_id : newUser.user_id}
+    onChange={(e) =>
+      isEditDialogOpen
+        ? setSelectedUser({ ...selectedUser, user_id: e.target.value })
+        : setNewUser({ ...newUser, user_id: e.target.value })
+    }
+  />
+</div>
+
             <div>
               <label className="block mb-2 text-sm">Name</label>
               <Input
