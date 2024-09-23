@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Add useRef here
+
 import {
   Container,
   Paper,
@@ -20,13 +21,17 @@ import {
   Alert,
   MenuItem,
 } from '@mui/material';
-import { Edit, Delete } from '@mui/icons-material';
+import { Edit, Delete ,Print} from '@mui/icons-material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { supabase } from '../supabaseClient'; // Import Supabase
+import ReceiptComponent from './ReceiptComponent'; // Import ReceiptComponent
+import ReactToPrint from 'react-to-print'; 
+
 
 const theme = createTheme();
 
 function Members() {
+  const printRef = useRef(); // Ref for print component
   // State variables
   const [membershipPlans, setMembershipPlans] = useState([]);
   const [memberships, setMemberships] = useState([]);
@@ -444,41 +449,53 @@ function Members() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {memberships.map((membership) => (
-                  <TableRow key={membership.id}>
-                    <TableCell>{membership.users?.name || 'Unknown User'}</TableCell>
-                    <TableCell>
-                      {membership.membership_plans?.name || 'Unknown Plan'}
-                    </TableCell>
-                    <TableCell>
-                      {membership.payment_modes?.name || 'Unknown Mode'}
-                    </TableCell>
-                    <TableCell>{membership.start_date}</TableCell>
-                    <TableCell>{membership.end_date}</TableCell>
-                    <TableCell>{membership.admission_or_renewal_fee}</TableCell>
-                    <TableCell>{membership.additional_fee}</TableCell>
-                    <TableCell>{membership.gst_percentage}</TableCell>
-                    <TableCell>{membership.credit_used}</TableCell>
-                    <TableCell>{membership.total_amount}</TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        onClick={() => handleOpenMembershipDialog(membership)}
-                        color="primary"
-                        size="small"
-                      >
-                        <Edit />
-                      </IconButton>
-                      <IconButton
-                        onClick={() => handleDeleteMembership(membership.id)}
-                        color="error"
-                        size="small"
-                      >
-                        <Delete />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
+  {memberships.map((membership) => (
+    <TableRow key={membership.id}>
+      <TableCell>{membership.users?.name || 'Unknown User'}</TableCell>
+      <TableCell>{membership.membership_plans?.name || 'Unknown Plan'}</TableCell>
+      <TableCell>{membership.payment_modes?.name || 'Unknown Mode'}</TableCell>
+      <TableCell>{membership.start_date}</TableCell>
+      <TableCell>{membership.end_date}</TableCell>
+      <TableCell>{membership.admission_or_renewal_fee}</TableCell>
+      <TableCell>{membership.additional_fee}</TableCell>
+      <TableCell>{membership.gst_percentage}</TableCell>
+      <TableCell>{membership.credit_used}</TableCell>
+      <TableCell>{membership.total_amount}</TableCell>
+      <TableCell align="right">
+        <IconButton
+          onClick={() => handleOpenMembershipDialog(membership)}
+          color="primary"
+          size="small"
+        >
+          <Edit />
+        </IconButton>
+        <IconButton
+          onClick={() => handleDeleteMembership(membership.id)}
+          color="error"
+          size="small"
+        >
+          <Delete />
+        </IconButton>
+
+        {/* Add ReactToPrint button */}
+        <ReactToPrint
+          trigger={() => (
+            <IconButton color="primary" size="small">
+              <Print />
+            </IconButton>
+          )}
+          content={() => printRef.current}
+        />
+        
+        {/* Hidden ReceiptComponent */}
+        <Box sx={{ display: 'none' }}>
+          <ReceiptComponent ref={printRef} membership={membership} />
+        </Box>
+      </TableCell>
+    </TableRow>
+  ))}
+</TableBody>
+
             </Table>
           </Box>
         </Paper>
