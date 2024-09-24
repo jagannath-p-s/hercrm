@@ -9,9 +9,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  build: {
-    rollupOptions: {
-      external: ['dom-to-image'],  // Externalize dom-to-image to avoid build issues
-    },
-  },
+  // Remove or comment out the build.rollupOptions.external configuration
+  // build: {
+  //   rollupOptions: {
+  //     external: ['dom-to-image'],  
+  //   },
+  // },
 });
