@@ -1,3 +1,5 @@
+// vite.config.js
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -9,10 +11,12 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // Remove or comment out the build.rollupOptions.external configuration
-  // build: {
-  //   rollupOptions: {
-  //     external: ['dom-to-image'],  
-  //   },
-  // },
+  optimizeDeps: {
+    include: ['dom-to-image-more'],
+  },
+  build: {
+    commonjsOptions: {
+      include: [/dom-to-image-more/, /node_modules/],
+    },
+  },
 });
