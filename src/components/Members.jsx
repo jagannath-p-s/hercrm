@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'; // Add useRef here
-
+import React, { useState, useEffect, useRef } from 'react';
+import jsPDF from 'jspdf';
+import domtoimage from 'dom-to-image';
 import {
   Container,
   Paper,
@@ -21,17 +22,17 @@ import {
   Alert,
   MenuItem,
 } from '@mui/material';
-import { Edit, Delete ,Print} from '@mui/icons-material';
+import { Edit, Delete, Print, Share as ShareIcon } from '@mui/icons-material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { supabase } from '../supabaseClient'; // Import Supabase
-import ReceiptComponent from './ReceiptComponent'; // Import ReceiptComponent
-import ReactToPrint from 'react-to-print'; 
-
+import { supabase } from '../supabaseClient'; // Adjust the path if necessary
+import ReceiptComponent from './ReceiptComponent'; // Adjust the path if necessary
+import ReactToPrint from 'react-to-print';
 
 const theme = createTheme();
 
 function Members() {
   const printRef = useRef(); // Ref for print component
+  const pdfRef = useRef(); // Ref for PDF generation
   // State variables
   const [membershipPlans, setMembershipPlans] = useState([]);
   const [memberships, setMemberships] = useState([]);
@@ -63,10 +64,13 @@ function Members() {
     credit_used: 0,
     total_amount: 0,
   });
+  const [selectedMembership, setSelectedMembership] = useState(null);
+  const [isReceiptRendered, setIsReceiptRendered] = useState(false);
 
   // Fetch data from Supabase
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchData = async () => {
@@ -100,7 +104,7 @@ function Members() {
         gst_percentage,
         credit_used,
         total_amount,
-        users (id, name),
+        users (id, name, mobile_number_1),
         membership_plans (id, name),
         payment_modes (id, name)
       `
@@ -119,6 +123,123 @@ function Members() {
     const { data, error } = await supabase.from('payment_modes').select('*');
     if (error) console.error('Error fetching payment modes:', error);
     else setPaymentModes(data);
+  };
+
+  // Effect to generate PDF when selectedMembership changes
+  useEffect(() => {
+    if (selectedMembership && isReceiptRendered) {
+      generatePDF();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReceiptRendered]);
+
+  const handleReceiptRenderComplete = () => {
+    setIsReceiptRendered(true);
+  };
+
+  const handleShareReceipt = (membership) => {
+    setSelectedMembership(membership);
+    setIsReceiptRendered(false);
+  };
+
+  const generatePDF = async () => {
+    try {
+      const element = pdfRef.current;
+
+      // Check if element exists and has dimensions
+      if (!element) {
+        throw new Error('Receipt component not found.');
+      }
+
+      // Temporarily set visibility to visible to ensure rendering
+      element.style.visibility = 'visible';
+
+      const dataUrl = await domtoimage.toPng(element);
+
+      // Reset visibility
+      element.style.visibility = 'hidden';
+
+      // Create jsPDF instance
+      const pdf = new jsPDF('p', 'pt', 'a4');
+
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+      const pdfBlob = pdf.output('blob');
+
+      const pdfUrl = await uploadPDF(pdfBlob, selectedMembership);
+
+      if (!pdfUrl) {
+        showSnackbar('Failed to upload PDF.', 'error');
+        return;
+      }
+
+      // Get the member's WhatsApp number
+      let mobileNumber = selectedMembership.users?.mobile_number_1 || '';
+
+      if (!mobileNumber) {
+        showSnackbar('Member does not have a WhatsApp number.', 'error');
+        return;
+      }
+
+      // Remove any non-digit characters from the mobile number
+      mobileNumber = mobileNumber.replace(/\D/g, '');
+
+      // Ensure the mobile number is in international format
+      if (!mobileNumber.startsWith('91')) {
+        mobileNumber = '91' + mobileNumber;
+      }
+
+      // Generate the WhatsApp link
+      const message = `Here is your receipt: ${pdfUrl}`;
+      const whatsappLink = `https://wa.me/${mobileNumber}?text=${encodeURIComponent(
+        message
+      )}`;
+
+      // Open the WhatsApp link
+      window.open(whatsappLink, '_blank');
+
+      // Reset selectedMembership
+      setSelectedMembership(null);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showSnackbar('Error generating PDF: ' + error.message, 'error');
+      setSelectedMembership(null);
+    }
+  };
+
+  const uploadPDF = async (pdfBlob, membership) => {
+    const fileName = `receipt_${membership.id}.pdf`;
+
+    // Ensure you have a 'receipts' bucket in Supabase Storage
+    const { data, error } = await supabase.storage
+      .from('receipts')
+      .upload(fileName, pdfBlob, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (error) {
+      console.error('Error uploading PDF:', error);
+      showSnackbar('Error uploading PDF: ' + error.message, 'error');
+      return null;
+    }
+
+    // Get the public URL
+    const { data: publicURLData, error: publicUrlError } = supabase.storage
+      .from('receipts')
+      .getPublicUrl(fileName);
+
+    if (publicUrlError) {
+      console.error('Error getting public URL:', publicUrlError);
+      showSnackbar('Error getting PDF URL: ' + publicUrlError.message, 'error');
+      return null;
+    }
+
+    return publicURLData.publicUrl;
   };
 
   // Plan dialog functions
@@ -252,6 +373,7 @@ function Members() {
       ...prev,
       total_amount: total.toFixed(2),
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     membershipFormData.admission_or_renewal_fee,
     membershipFormData.additional_fee,
@@ -449,59 +571,88 @@ function Members() {
                 </TableRow>
               </TableHead>
               <TableBody>
-  {memberships.map((membership) => (
-    <TableRow key={membership.id}>
-      <TableCell>{membership.users?.name || 'Unknown User'}</TableCell>
-      <TableCell>{membership.membership_plans?.name || 'Unknown Plan'}</TableCell>
-      <TableCell>{membership.payment_modes?.name || 'Unknown Mode'}</TableCell>
-      <TableCell>{membership.start_date}</TableCell>
-      <TableCell>{membership.end_date}</TableCell>
-      <TableCell>{membership.admission_or_renewal_fee}</TableCell>
-      <TableCell>{membership.additional_fee}</TableCell>
-      <TableCell>{membership.gst_percentage}</TableCell>
-      <TableCell>{membership.credit_used}</TableCell>
-      <TableCell>{membership.total_amount}</TableCell>
-      <TableCell align="right">
-        <IconButton
-          onClick={() => handleOpenMembershipDialog(membership)}
-          color="primary"
-          size="small"
-        >
-          <Edit />
-        </IconButton>
-        <IconButton
-          onClick={() => handleDeleteMembership(membership.id)}
-          color="error"
-          size="small"
-        >
-          <Delete />
-        </IconButton>
+                {memberships.map((membership) => (
+                  <TableRow key={membership.id}>
+                    <TableCell>{membership.users?.name || 'Unknown User'}</TableCell>
+                    <TableCell>
+                      {membership.membership_plans?.name || 'Unknown Plan'}
+                    </TableCell>
+                    <TableCell>
+                      {membership.payment_modes?.name || 'Unknown Mode'}
+                    </TableCell>
+                    <TableCell>{membership.start_date}</TableCell>
+                    <TableCell>{membership.end_date}</TableCell>
+                    <TableCell>{membership.admission_or_renewal_fee}</TableCell>
+                    <TableCell>{membership.additional_fee}</TableCell>
+                    <TableCell>{membership.gst_percentage}</TableCell>
+                    <TableCell>{membership.credit_used}</TableCell>
+                    <TableCell>{membership.total_amount}</TableCell>
+                    <TableCell align="right">
+                      <IconButton
+                        onClick={() => handleOpenMembershipDialog(membership)}
+                        color="primary"
+                        size="small"
+                      >
+                        <Edit />
+                      </IconButton>
+                      <IconButton
+                        onClick={() => handleDeleteMembership(membership.id)}
+                        color="error"
+                        size="small"
+                      >
+                        <Delete />
+                      </IconButton>
 
-        {/* Add ReactToPrint button */}
-        <ReactToPrint
-          trigger={() => (
-            <IconButton color="primary" size="small">
-              <Print />
-            </IconButton>
-          )}
-          content={() => printRef.current}
-        />
-        
-        {/* Hidden ReceiptComponent */}
-        <Box sx={{ display: 'none' }}>
-          <ReceiptComponent ref={printRef} membership={membership} />
-        </Box>
-      </TableCell>
-    </TableRow>
-  ))}
-</TableBody>
+                      {/* Share Button */}
+                      <IconButton
+                        onClick={() => handleShareReceipt(membership)}
+                        color="primary"
+                        size="small"
+                      >
+                        <ShareIcon />
+                      </IconButton>
 
+                      {/* Add ReactToPrint button */}
+                      <ReactToPrint
+                        trigger={() => (
+                          <IconButton color="primary" size="small">
+                            <Print />
+                          </IconButton>
+                        )}
+                        content={() => printRef.current}
+                      />
+
+                      {/* Hidden ReceiptComponent for printing */}
+                      <Box sx={{ display: 'none' }}>
+                        <ReceiptComponent ref={printRef} membership={membership} />
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
             </Table>
           </Box>
         </Paper>
 
-        {/* Membership Plan Dialog */}
-        <Dialog open={openPlanDialog} onClose={handleClosePlanDialog}>
+        {/* Hidden ReceiptComponent for PDF generation */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '-10000px',
+            left: '-10000px',
+          }}
+        >
+          {selectedMembership && (
+            <ReceiptComponent
+              ref={pdfRef}
+              membership={selectedMembership}
+              onRenderComplete={handleReceiptRenderComplete}
+            />
+          )}
+        </div>
+
+          {/* Membership Plan Dialog */}
+          <Dialog open={openPlanDialog} onClose={handleClosePlanDialog}>
           <DialogTitle>
             {planFormData.id ? 'Edit Membership Plan' : 'Create Membership Plan'}
           </DialogTitle>
