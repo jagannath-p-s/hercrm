@@ -194,7 +194,7 @@ function Members() {
       }
 
       // Generate the WhatsApp link
-      const message = `Here is your receipt: ${pdfUrl}`;
+      const message = `Hello, here is your receipt: ${pdfUrl}. Please note, this link will expire in 3 days. Make sure to download and save it before the expiration date.`;
       const whatsappLink = `https://wa.me/${mobileNumber}?text=${encodeURIComponent(
         message
       )}`;
