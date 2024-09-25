@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import jsPDF from 'jspdf';
-import domtoimage from 'dom-to-image-more';
+import domtoimage from 'dom-to-image';
 import {
   Container,
   Paper,
