@@ -6,6 +6,8 @@
 -- Begin transaction
 BEGIN;
 
+
+
 -- Table: lead_sources
 -- Purpose: Tracks the sources from which new members are generated.
 CREATE TABLE lead_sources (
