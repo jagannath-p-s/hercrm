@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Forms from '../components/Forms'; // Import the new Forms component
 import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
@@ -10,6 +11,7 @@ import {
   ExitToApp as ExitToAppIcon,
 } from '@mui/icons-material';
 import CoPresentIcon from '@mui/icons-material/CoPresent'; // Icon for Attendance
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter'; // Icon for Equipment
 import { Tooltip, Menu, MenuItem, Snackbar, Alert, CircularProgress } from '@mui/material';
 import { motion } from 'framer-motion';
@@ -94,11 +96,13 @@ const HomePage = () => {
     { icon: <CoPresentIcon />, tooltip: 'Attendance', component: 'Attendance' },
     { icon: <WorkIcon />, tooltip: 'Staff', component: 'Staff' },
     { icon: <FitnessCenterIcon />, tooltip: 'Equipment', component: 'Equipment' },
+    
     // Admin-specific items
     ...(staff?.role === 'Admin'
       ? [
           { icon: <AccountBoxIcon />, tooltip: 'Users', component: 'Users' }, // Users visible only for Admin
           { icon: <LocalAtmIcon />, tooltip: 'Salary', component: 'Salary' }, // Salary visible only for Admin
+          { icon: <AssignmentIcon />, tooltip: 'Forms', component: 'Forms' }, // New Forms item,
         ]
       : []),
   ];
@@ -121,9 +125,13 @@ const HomePage = () => {
       case 'Equipment':
         return <Equipment />;
       case 'Users':
+        
         return staff?.role === 'Admin' ? <Users /> : null; // Admin-only component
       case 'Salary':
         return staff?.role === 'Admin' ? <Salary /> : null; // Admin-only component
+      case 'Forms': // Render the new Forms component
+        return <Forms />;
+
       default:
         return <Dashboard />;
     }
